@@ -4,7 +4,7 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.backends import default_backend
 import os
 
-def generate_aes_key():
+def generate_aes_key_iv():
     key = os.urandom(32) #AES-256
     iv = os.urandom(16)
     return key , iv

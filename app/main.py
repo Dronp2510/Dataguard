@@ -1,3 +1,4 @@
+from anyio.streams import file
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -11,6 +12,7 @@ from .database import Base, engine, SessionLocal
 from .models import Document, SharedLink
 from .schemas import DocumentResponse, ShareResponse
 from .utils import generate_token, STORAGE_PATH
+from crypto_utils import  generate_aes_key_iv , encrypt_bytes
 
 Base.metadata.create_all(bind=engine)
 
@@ -33,9 +35,12 @@ async def upload_document(
 
     stored_name = str(uuid4())
     file_path = STORAGE_PATH / stored_name
+    file_bytes = await file.read()
+    aes_key, iv = generate_aes_key_iv()
+    encrypted_bytes = encrypt_bytes(file_bytes, aes_key, iv)
 
     with open(file_path, "wb") as f:
-        f.write(await file.read())
+        f.write(encrypted_bytes)
 
     doc = Document(
         original_filename=file.filename,
