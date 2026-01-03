@@ -17,7 +17,7 @@ from .database import Base, engine, SessionLocal
 from .models import Document, SharedLink
 from .schemas import DocumentResponse, ShareResponse
 from .utils import generate_token, STORAGE_PATH
-from crypto_utils import  generate_aes_key_iv , encrypt_bytes , decrypt_bytes , encrypt_aes_key , decrypt_aes_key
+from .crypto_utils import  generate_aes_key_iv , encrypt_bytes , decrypt_bytes , encrypt_aes_key , decrypt_aes_key
 
 Base.metadata.create_all(bind=engine)
 
