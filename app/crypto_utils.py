@@ -25,6 +25,26 @@ def decrypt_bytes(data: bytes, key: bytes, iv: bytes) -> bytes:
     decryptor = cipher.decryptor()
     return decryptor.update(data) + decryptor.finalize()
 
+def encrypt_aes_key(aes_key: bytes, public_key):
+    return public_key.encrypt(
+        aes_key,
+        padding.OAEP(
+            mgf=padding.MGF1(hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+
+def decrypt_aes_key(encrypted_key, private_key):
+    return private_key.decrypt(
+        encrypted_key,
+        padding.OAEP(
+            mgf=padding.MGF1(hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+
 # def generate_rsa_keys():
 #     private_key = rsa.generate_private_key(
 #         public_exponent=65537,
@@ -32,25 +52,7 @@ def decrypt_bytes(data: bytes, key: bytes, iv: bytes) -> bytes:
 #     )
 #     return private_key, private_key.public_key()
 #
-# def encrypt_aes_key(aes_key, public_key):
-#     return public_key.encrypt(
-#         aes_key,
-#         padding.OAEP(
-#             mgf=padding.MGF1(hashes.SHA256()),
-#             algorithm=hashes.SHA256(),
-#             label=None
-#         )
-#     )
 #
-# def decrypt_aes_key(encrypted_key, private_key):
-#     return private_key.decrypt(
-#         encrypted_key,
-#         padding.OAEP(
-#             mgf=padding.MGF1(hashes.SHA256()),
-#             algorithm=hashes.SHA256(),
-#             label=None
-#         )
-#     )
 #
 # def decrypt_file(ciphertext, key, iv):
 #     cipher = Cipher(algorithms.AES(key), modes.CFB(iv), backend=default_backend())
