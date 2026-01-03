@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey
+from sqlalchemy import LargeBinary, Column, String, DateTime, Boolean, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.sqlite import BLOB
 from uuid import uuid4
@@ -19,8 +19,22 @@ class SharedLink(Base):
     __tablename__ = "shared_links"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    document_id = Column(String, ForeignKey("documents.id"))
-    token = Column(String, unique=True, index=True)
-    expires_at = Column(DateTime)
+
+    document_id = Column(String, ForeignKey("documents.id"), nullable=False)
+
+    token = Column(String, unique=True, index=True, nullable=False)
+
+    encrypted_aes_key = Column(LargeBinary, nullable=False)
+    iv = Column(LargeBinary, nullable=False)
+
+    expires_at = Column(DateTime, nullable=False)
     is_active = Column(Boolean, default=True)
+
     created_at = Column(DateTime, server_default=func.now())
+
+    # id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    # document_id = Column(String, ForeignKey("documents.id"))
+    # token = Column(String, unique=True, index=True)
+    # expires_at = Column(DateTime)
+    # is_active = Column(Boolean, default=True)
+    # created_at = Column(DateTime, server_default=func.now())
