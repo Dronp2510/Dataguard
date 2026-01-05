@@ -9,20 +9,18 @@ import Settings from "./pages/Settings";
 function App() {
   return (
     <BrowserRouter>
-      <AppLayout>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/vaults" element={<Vaults />} />
-          <Route path="/activity" element={<Activity />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
-      </AppLayout>
+      <Routes>
+        {/* Layout Route */}
+        <Route path="/" element={<AppLayout />}>
+          {/* Pages rendered inside <Outlet /> */}
+          <Route index element={<Home />} />
+          <Route path="vaults" element={<Vaults />} />
+          <Route path="activity" element={<Activity />} />
+          <Route path="settings" element={<Settings />} />
+        </Route>
+      </Routes>
     </BrowserRouter>
   );
 }
 
 export default App;
-
-
-
-
