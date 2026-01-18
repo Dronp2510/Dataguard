@@ -1,59 +1,78 @@
 import { useState } from "react";
-import { Share2, MoreVertical, FileText } from "lucide-react";
-import ShareModal from "../components/ShareModel";
+import { Folder, FileText, Share2, MoreVertical } from "lucide-react";
+import ShareModal from "../components/ShareModal";
+import AddItemModal from "../components/AddItemModal";
 
-const mockVaults = [
-  { id: 1, name: "Aadhaar_Card.pdf", modified: "2 days ago" },
-  { id: 2, name: "PAN_Card.pdf", modified: "5 days ago" },
-  { id: 3, name: "Result_Sem7.pdf", modified: "1 week ago" },
+const mockItems = [
+  { id: 1, type: "folder", name: "Identity Docs", modified: "3 days ago" },
+  { id: 2, type: "folder", name: "Academic", modified: "1 week ago" },
+  { id: 3, type: "file", name: "Aadhaar_Card.pdf", modified: "2 days ago" },
+  { id: 4, type: "file", name: "PAN_Card.pdf", modified: "5 days ago" },
 ];
 
 function Vaults() {
-  const [selectedFile, setSelectedFile ] = useState(null);
-  return(
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  const folders = mockItems.filter(i => i.type === "folder");
+  const files = mockItems.filter(i => i.type === "file");
+
+  return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold">Your Vaults</h2>
-        <button className="bg-slate-900 text-white px-4 py-2 rounded-md hover:bg-slate-800">
+        <button
+          className="bg-slate-900 text-white px-4 py-2 rounded-md"
+          onClick={() => setShowAddModal(true)}
+        >
           + Add File
         </button>
       </div>
 
       {/* Vault list */}
       <div className="bg-white rounded-lg shadow-sm divide-y">
-        {mockVaults.map((file) => (
+        {[...folders, ...files].map(item => (
           <div
-            key={file.id}
-            className="flex items-center justify-between px-6 py-4 hover:bg-gray-50"
+            key={item.id}
+            className="flex justify-between items-center px-6 py-4 hover:bg-gray-50"
           >
-            {/* Left */}
             <div className="flex items-center gap-4">
-              <FileText className="text-gray-500" />
+              {item.type === "folder" ? (
+                <Folder className="text-yellow-500" />
+              ) : (
+                <FileText className="text-gray-500" />
+              )}
               <div>
-                <p className="font-medium">{file.name}</p>
+                <p className="font-medium">{item.name}</p>
                 <p className="text-sm text-gray-500">
-                  Last modified: {file.modified}
+                  Last modified: {item.modified}
                 </p>
               </div>
             </div>
 
-            {/* Right */}
-            <div className="flex items-center gap-4">
-              <button className="p-2 rounded hover:bg-gray-100" onClick={() => setSelectedFile(file)} >
-              <Share2 size={18} />
-              </button>
-
-              <button className="p-2 rounded hover:bg-gray-100">
+            {item.type === "file" && (
+              <div className="flex items-center gap-4">
+                <button onClick={() => setSelectedFile(item)}>
+                  <Share2 size={18} />
+                </button>
                 <MoreVertical size={18} />
-              </button>
-            </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
-      <ShareModal file={selectedFile} onClose={() => setSelectedFile(null)}/>
+
+      {/* Modals */}
+      <ShareModal
+        file={selectedFile}
+        onClose={() => setSelectedFile(null)}
+      />
+
+      {showAddModal && (
+        <AddItemModal onClose={() => setShowAddModal(false)} />
+      )}
     </div>
-  
   );
 }
 
