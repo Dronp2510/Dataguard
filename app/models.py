@@ -1,40 +1,46 @@
-from sqlalchemy import LargeBinary, Column, String, DateTime, Boolean, ForeignKey
+from sqlalchemy import LargeBinary, Column, String, DateTime, Boolean, ForeignKey, Enum
 from sqlalchemy.sql import func
-from sqlalchemy.dialects.sqlite import BLOB
 from uuid import uuid4
 from .database import Base
+import enum
 
-class Document(Base):
-    __tablename__ = "documents"
+
+class VaultItemType(enum.Enum):
+    file = "file"
+    folder = "folder"
+
+
+class VaultItem(Base):
+    __tablename__ = "vault_items"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    original_filename = Column(String)
-    stored_filename = Column(String)
-    category = Column(String)
-    mime_type = Column(String)
+    type = Column(Enum(VaultItemType), nullable=False)
+    parent_id = Column(String, ForeignKey("vault_items.id"), nullable=True)
+    owner_id = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
 
 
-class SharedLink(Base):
-    __tablename__ = "shared_links"
+class Folder(Base):
+    __tablename__ = "folders"
+
+    id = Column(String, ForeignKey("vault_items.id"), primary_key=True)
+    name = Column(String, nullable=False)
+
+
+class File(Base):
+    __tablename__ = "files"
+
+    id = Column(String, ForeignKey("vault_items.id"), primary_key=True)
+    filename = Column(String, nullable=False)
+    mime_type = Column(String, nullable=False)
+    storage_path = Column(String, nullable=False)
+    iv = Column(String, nullable=False)
+
+
+class EncryptedKey(Base):
+    __tablename__ = "encrypted_keys"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-
-    document_id = Column(String, ForeignKey("documents.id"), nullable=False)
-
-    token = Column(String, unique=True, index=True, nullable=False)
-
-    encrypted_aes_key = Column(LargeBinary, nullable=False)
-    iv = Column(LargeBinary, nullable=False)
-
-    expires_at = Column(DateTime, nullable=False)
-    is_active = Column(Boolean, default=True)
-
-    created_at = Column(DateTime, server_default=func.now())
-
-    # id = Column(String, primary_key=True, default=lambda: str(uuid4()))
-    # document_id = Column(String, ForeignKey("documents.id"))
-    # token = Column(String, unique=True, index=True)
-    # expires_at = Column(DateTime)
-    # is_active = Column(Boolean, default=True)
-    # created_at = Column(DateTime, server_default=func.now())
+    vault_item_id = Column(String, ForeignKey("vault_items.id"))
+    user_id = Column(String)
+    encrypted_key = Column(String)
