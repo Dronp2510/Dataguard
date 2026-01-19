@@ -7,7 +7,6 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
   const [mode, setMode] = useState(null);
   const [folderName, setFolderName] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
-  const [selectedFolder, setSelectedFolder] = useState("");
 
   // -------------------------
   // CREATE FOLDER
@@ -33,7 +32,7 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
   // -------------------------
   // UPLOAD FILE
   // -------------------------
-  const handleUploadFile = async (targetFolderId = null) => {
+  const handleUploadFile = async () => {
     if (!selectedFile) return;
 
     const formData = new FormData();
@@ -43,8 +42,8 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
     formData.append("encrypted_key", "test-key");
     formData.append("iv", "test-iv");
 
-    if (targetFolderId) {
-      formData.append("parent_folder_id", targetFolderId);
+    if (parentFolderId) {
+      formData.append("parent_folder_id", parentFolderId);
     }
 
     await fetch(`${API_BASE}/vault/files`, {
@@ -79,13 +78,6 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
 
             <button
               className="w-full border rounded-md p-3 text-left hover:bg-gray-50"
-              onClick={() => setMode("existing-folder")}
-            >
-              📂 Add file to existing folder
-            </button>
-
-            <button
-              className="w-full border rounded-md p-3 text-left hover:bg-gray-50"
               onClick={() => setMode("direct-file")}
             >
               📄 Add file directly to vault
@@ -107,32 +99,6 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
               className="w-full bg-slate-900 text-white py-2 rounded-md"
             >
               Create Folder
-            </button>
-          </div>
-        )}
-
-        {/* Add to existing folder */}
-        {mode === "existing-folder" && (
-          <div className="space-y-4">
-            {/* TEMP: folder selection will be dynamic later */}
-            <input
-              className="w-full border rounded-md px-3 py-2"
-              placeholder="Folder ID"
-              value={selectedFolder}
-              onChange={(e) => setSelectedFolder(e.target.value)}
-            />
-
-            <input
-              type="file"
-              className="w-full"
-              onChange={(e) => setSelectedFile(e.target.files[0])}
-            />
-
-            <button
-              onClick={() => handleUploadFile(selectedFolder)}
-              className="w-full bg-slate-900 text-white py-2 rounded-md"
-            >
-              Upload File
             </button>
           </div>
         )}

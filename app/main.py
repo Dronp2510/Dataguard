@@ -125,14 +125,17 @@ def download_encrypted_file(file_id: str):
 def download_encrypted_blob(file_id: str):
     db = SessionLocal()
     try:
-        file = db.query(File).get(file_id)
+        file = db.query(VaultFile).get(file_id)
         if not file:
             raise HTTPException(404)
 
         return FileResponse(
             path=file.storage_path,
-            media_type="application/octet-stream",
-            filename=file.filename
+            media_type=file.filename,
+            filename=file.filename,
+            headers={
+                "Content-Disposition": f'inline; filename="{file.filename}"'
+            }
         )
     finally:
         db.close()

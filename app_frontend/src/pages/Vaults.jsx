@@ -1,6 +1,7 @@
 import { Folder, FileText, Share2, MoreVertical } from "lucide-react";
 import ShareModal from "../components/ShareModal";
 import AddItemModal from "../components/AddItemModal";
+import FilePreviewModal from "../components/FilePreviewModal";
 import { useEffect, useState } from "react";
 
 
@@ -8,18 +9,28 @@ function Vaults() {
   const [items, setItems] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const fetchVaultItems = () => {
-  fetch("http://localhost:8000/vault/items")
+  const [currentFolderId, setCurrentFolderId] = useState(null);
+  const fetchVaultItems = (parentId = null) => {
+    const url = parentId
+        ? `http://localhost:8000/vault/items?parent_id=${parentId}`
+        : `http://localhost:8000/vault/items`;
+
+    fetch(url)
     .then(res => res.json())
     .then(data => setItems(data))
     .catch(err => console.error("Failed to load vault items", err));
 };
   useEffect(() => {
-  fetchVaultItems();
-  }, []);
+  fetchVaultItems(currentFolderId);
+  }, [currentFolderId]);
+
+  const handleOpenFile = (file) => {
+        setPreviewFile(file);
+    };
 
   const folders = items.filter(i => i.type === "folder");
   const files = items.filter(i => i.type === "file");
+  const [previewFile, setPreviewFile] = useState(null);
 
   return (
     <div className="space-y-6">
@@ -34,40 +45,66 @@ function Vaults() {
         </button>
       </div>
 
+      {currentFolderId && (
+          <button
+            className="text-sm text-blue-600"
+            onClick={() => setCurrentFolderId(null)}
+          >
+            ← Back
+          </button>
+        )}
+
       {/* Vault list */}
       <div className="bg-white rounded-lg shadow-sm divide-y">
-        {[...folders, ...files].map(item => (
-          <div
-            key={item.id}
-            className="flex justify-between items-center px-6 py-4 hover:bg-gray-50"
-          >
-            <div className="flex items-center gap-4">
-              {item.type === "folder" ? (
-                <Folder className="text-yellow-500" />
-              ) : (
-                <FileText className="text-gray-500" />
-              )}
-              <div>
-                <p className="font-medium">
-                    {item.name}
-                    </p>
-                <p className="text-sm text-gray-500">
-                  Created: {new Date(item.created_at).toLocaleDateString()}
-                </p>
-              </div>
-            </div>
+          {items.map(item => (
+            <div
+              key={item.id}
+              className="flex justify-between items-center px-6 py-4 hover:bg-gray-50"
+            >
+              {/* LEFT SIDE: Folder/File main click */}
+              <div
+                className="flex items-center gap-4 cursor-pointer"
+                onClick={() => {
+                  if (item.type === "folder") {
+                    setCurrentFolderId(item.id);
+                  } else {
+                    handleOpenFile(item);
+                  }
+                }}
+              >
+                {item.type === "folder" ? (
+                  <Folder className="text-yellow-500" />
+                ) : (
+                  <FileText className="text-gray-500" />
+                )}
 
-            {item.type === "file" && (
-              <div className="flex items-center gap-4">
-                <button onClick={() => setSelectedFile(item)}>
-                  <Share2 size={18} />
-                </button>
-                <MoreVertical size={18} />
+                <div>
+                  <p className="font-medium">{item.name}</p>
+                  <p className="text-sm text-gray-500">
+                    Created: {new Date(item.created_at).toLocaleDateString()}
+                  </p>
+                </div>
               </div>
-            )}
-          </div>
-        ))}
-      </div>
+
+              {/* RIGHT SIDE: File actions */}
+              {item.type === "file" && (
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation(); // VERY IMPORTANT
+                      setSelectedFile(item);
+                    }}
+                  >
+                    <Share2 size={18} />
+                  </button>
+
+                  <MoreVertical size={18} />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
 
       {/* Modals */}
       <ShareModal
@@ -77,13 +114,21 @@ function Vaults() {
 
       {showAddModal && (
         <AddItemModal
-            onClose={() => setShowAddModal(false)}
-            onSuccess={() => {
-                fetchVaultItems();
-                setShowAddModal(false);
-      }}
-    />
+          parentFolderId={currentFolderId}
+          onClose={() => setShowAddModal(false)}
+          onSuccess={() => {
+            fetchVaultItems(currentFolderId);
+            setShowAddModal(false);
+          }}
+        />
   )}
+
+      {previewFile && (
+          <FilePreviewModal
+            file={previewFile}
+            onClose={() => setPreviewFile(null)}
+          />
+        )}
     </div>
   );
 }
