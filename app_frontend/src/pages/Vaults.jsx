@@ -1,21 +1,24 @@
-import { useState } from "react";
 import { Folder, FileText, Share2, MoreVertical } from "lucide-react";
 import ShareModal from "../components/ShareModal";
 import AddItemModal from "../components/AddItemModal";
+import { useEffect, useState } from "react";
 
-const mockItems = [
-  { id: 1, type: "folder", name: "Identity Docs", modified: "3 days ago" },
-  { id: 2, type: "folder", name: "Academic", modified: "1 week ago" },
-  { id: 3, type: "file", name: "Aadhaar_Card.pdf", modified: "2 days ago" },
-  { id: 4, type: "file", name: "PAN_Card.pdf", modified: "5 days ago" },
-];
 
 function Vaults() {
+  const [items, setItems] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const folders = mockItems.filter(i => i.type === "folder");
-  const files = mockItems.filter(i => i.type === "file");
+  useEffect(() => {
+  fetch("http://localhost:8000/vault/items")
+    .then(res => res.json())
+    .then(data => setItems(data))
+    .catch(err => console.error("Failed to load vault items", err));
+
+  }, []);
+
+  const folders = items.filter(i => i.type === "folder");
+  const files = items.filter(i => i.type === "file");
 
   return (
     <div className="space-y-6">
@@ -44,9 +47,11 @@ function Vaults() {
                 <FileText className="text-gray-500" />
               )}
               <div>
-                <p className="font-medium">{item.name}</p>
+                <p className="font-medium">
+                    {item.type === "folder" ? "Folder" : "Encrypted File"}
+                    </p>
                 <p className="text-sm text-gray-500">
-                  Last modified: {item.modified}
+                  Created: {new Date(item.created_at).toLocaleString()}
                 </p>
               </div>
             </div>
