@@ -8,13 +8,14 @@ function Vaults() {
   const [items, setItems] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
-
-  useEffect(() => {
+  const fetchVaultItems = () => {
   fetch("http://localhost:8000/vault/items")
     .then(res => res.json())
     .then(data => setItems(data))
     .catch(err => console.error("Failed to load vault items", err));
-
+};
+  useEffect(() => {
+  fetchVaultItems();
   }, []);
 
   const folders = items.filter(i => i.type === "folder");
@@ -75,8 +76,14 @@ function Vaults() {
       />
 
       {showAddModal && (
-        <AddItemModal onClose={() => setShowAddModal(false)} />
-      )}
+        <AddItemModal
+            onClose={() => setShowAddModal(false)}
+            onSuccess={() => {
+                fetchVaultItems();
+                setShowAddModal(false);
+      }}
+    />
+  )}
     </div>
   );
 }

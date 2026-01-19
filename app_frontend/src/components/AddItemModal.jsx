@@ -27,7 +27,7 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
     });
 
     onSuccess?.();
-    onClose();
+//     onClose();
   };
 
   // -------------------------
@@ -53,7 +53,7 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
     });
 
     onSuccess?.();
-    onClose();
+//     onClose();
   };
 
   return (
