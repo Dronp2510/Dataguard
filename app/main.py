@@ -4,8 +4,10 @@ from pathlib import Path
 from .models import VaultItem, VaultItemType, Folder, File as VaultFile, EncryptedKey
 from .database import Base, engine, SessionLocal
 from .utils import generate_token, STORAGE_PATH
+from .schemas import VaultItemResponse
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import joinedload
 
 
 Base.metadata.create_all(bind=engine)
@@ -135,12 +137,33 @@ def download_encrypted_blob(file_id: str):
     finally:
         db.close()
 
-@app.get("/vault/items")
+@app.get("/vault/items", response_model=list[VaultItemResponse])
 def list_vault_items(parent_id: str | None = None):
     db = SessionLocal()
     try:
-        return db.query(VaultItem).filter(
+        items = db.query(VaultItem).filter(
             VaultItem.parent_id == parent_id
         ).all()
+
+        result = []
+
+        for item in items:
+            if item.type.value == "folder":
+                folder = db.query(Folder).filter_by(id=item.id).first()
+                name = folder.name if folder else "Unnamed Folder"
+
+            else:  # file
+                file = db.query(VaultFile).filter_by(id=item.id).first()
+                name = file.filename if file else "Unnamed File"
+
+            result.append({
+                "id": item.id,
+                "type": item.type.value,
+                "name": name,
+                "created_at": item.created_at,
+                "parent_id": item.parent_id,
+            })
+
+        return result
     finally:
         db.close()

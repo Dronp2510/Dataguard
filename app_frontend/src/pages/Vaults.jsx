@@ -48,10 +48,10 @@ function Vaults() {
               )}
               <div>
                 <p className="font-medium">
-                    {item.type === "folder" ? "Folder" : "Encrypted File"}
+                    {item.name}
                     </p>
                 <p className="text-sm text-gray-500">
-                  Created: {new Date(item.created_at).toLocaleString()}
+                  Created: {new Date(item.created_at).toLocaleDateString()}
                 </p>
               </div>
             </div>
