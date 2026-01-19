@@ -1,14 +1,27 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from uuid import uuid4
 from pathlib import Path
-from .models import VaultItem, VaultItemType, Folder, File, EncryptedKey
+from .models import VaultItem, VaultItemType, Folder, File as VaultFile, EncryptedKey
 from .database import Base, engine, SessionLocal
 from .utils import generate_token, STORAGE_PATH
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="DataGuard MVP")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",  # frontend dev server
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # -------------------------
 # DOCUMENT UPLOAD
@@ -38,7 +51,7 @@ async def upload_encrypted_file(
         db.add(vault_item)
         db.flush()
 
-        file = File(
+        file = VaultFile(
             id=vault_item.id,
             filename=filename,
             mime_type=mime_type,
@@ -88,7 +101,7 @@ def create_folder(name: str = Form(...), parent_id: str | None = Form(None)):
 def download_encrypted_file(file_id: str):
     db = SessionLocal()
     try:
-        file = db.query(File).get(file_id)
+        file = db.query(VaultFile).get(file_id)
         key = db.query(EncryptedKey).filter_by(vault_item_id=file_id).first()
 
         if not file or not key:
