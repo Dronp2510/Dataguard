@@ -55,3 +55,13 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     salt = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class Share(Base):
+    __tablename__ = "shares"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    vault_item_id = Column(String, ForeignKey("vault_items.id"))
+    encrypted_key = Column(String, nullable=False)  # file_key encrypted with share_key
+    expiry_time = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
