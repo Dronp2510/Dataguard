@@ -1,14 +1,16 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from uuid import uuid4
 from pathlib import Path
-from .models import VaultItem, VaultItemType, Folder, File as VaultFile, EncryptedKey
+from .models import VaultItem, VaultItemType, Folder, File as VaultFile, EncryptedKey, User
 from .database import Base, engine, SessionLocal
 from .utils import generate_token, STORAGE_PATH
 from .schemas import VaultItemResponse
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import joinedload
-
+from werkzeug.security import generate_password_hash, check_password_hash
+import os
+import base64
 
 Base.metadata.create_all(bind=engine)
 
@@ -35,7 +37,8 @@ async def upload_encrypted_file(
     mime_type: str = Form(...),
     parent_folder_id: str | None = Form(None),
     encrypted_key: str = Form(...),
-    iv: str = Form(...)
+    iv: str = Form(...),
+    user_id: str = Form(...)
 ):
     db = SessionLocal()
     try:
@@ -48,7 +51,7 @@ async def upload_encrypted_file(
         vault_item = VaultItem(
             type=VaultItemType.file,
             parent_id=parent_folder_id,
-            owner_id="demo-user"
+            owner_id=user_id
         )
         db.add(vault_item)
         db.flush()
@@ -64,7 +67,7 @@ async def upload_encrypted_file(
 
         key = EncryptedKey(
             vault_item_id=vault_item.id,
-            user_id="demo-user",
+            user_id=user_id,
             encrypted_key=encrypted_key
         )
         db.add(key)
@@ -77,13 +80,13 @@ async def upload_encrypted_file(
 
 
 @app.post("/vault/folders")
-def create_folder(name: str = Form(...), parent_id: str | None = Form(None)):
+def create_folder(name: str = Form(...), parent_id: str | None = Form(None), user_id: str = Form(...)):
     db = SessionLocal()
     try:
         vault_item = VaultItem(
             type=VaultItemType.folder,
             parent_id=parent_id,
-            owner_id="demo-user"
+            owner_id=user_id
         )
         db.add(vault_item)
         db.flush()
@@ -141,12 +144,19 @@ def download_encrypted_blob(file_id: str):
         db.close()
 
 @app.get("/vault/items", response_model=list[VaultItemResponse])
-def list_vault_items(parent_id: str | None = None):
+def list_vault_items(parent_id: str | None = None, user_id: str | None = None):
     db = SessionLocal()
     try:
-        items = db.query(VaultItem).filter(
-            VaultItem.parent_id == parent_id
-        ).all()
+        query = db.query(VaultItem).filter(
+                VaultItem.owner_id == user_id
+                )
+
+        if parent_id is None:
+            query = query.filter(VaultItem.parent_id.is_(None))
+        else:
+            query = query.filter(VaultItem.parent_id == parent_id)
+
+        items = query.all()
 
         result = []
 
@@ -168,5 +178,55 @@ def list_vault_items(parent_id: str | None = None):
             })
 
         return result
+    finally:
+        db.close()
+
+
+# -------------------------
+# AUTH - SIGNUP
+# -------------------------
+@app.post("/auth/signup")
+def signup(username: str = Form(...), email: str = Form(...), password: str = Form(...)):
+    db = SessionLocal()
+    try:
+        # check if user exists
+        existing = db.query(User).filter((User.email == email) | (User.username == username)).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="User already exists")
+
+        salt = base64.b64encode(os.urandom(16)).decode("utf-8")
+        password_hash = generate_password_hash(password)
+
+        user = User(
+            username=username,
+            email=email,
+            password_hash=password_hash,
+            salt=salt
+        )
+
+        db.add(user)
+        db.commit()
+
+        return {"message": "User created successfully"}
+    finally:
+        db.close()
+
+# -------------------------
+# AUTH - LOGIN
+# -------------------------
+@app.post("/auth/login")
+def login(email: str = Form(...), password: str = Form(...)):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+
+        if not user or not check_password_hash(user.password_hash, password):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        return {
+            "message": "Login success",
+            "user_id": user.id,
+            "salt": user.salt
+        }
     finally:
         db.close()

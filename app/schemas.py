@@ -18,5 +18,6 @@ class VaultItemResponse(BaseModel):
     created_at: datetime
     parent_id: Optional[str]
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }

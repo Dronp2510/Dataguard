@@ -44,3 +44,14 @@ class EncryptedKey(Base):
     vault_item_id = Column(String, ForeignKey("vault_items.id"))
     user_id = Column(String)
     encrypted_key = Column(String)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    username = Column(String, unique=True, nullable=False)
+    email = Column(String, unique=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    salt = Column(String, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
