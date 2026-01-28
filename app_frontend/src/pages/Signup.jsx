@@ -1,6 +1,14 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 function Signup() {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+
   return (
     <div className="min-h-screen flex">
       {/* Left panel */}
@@ -28,28 +36,63 @@ function Signup() {
             <input
               type="email"
               placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 rounded-md bg-slate-900 text-white placeholder-gray-400 focus:outline-none"
             />
 
             <input
               type="text"
               placeholder="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className="w-full px-4 py-3 rounded-md bg-slate-900 text-white placeholder-gray-400 focus:outline-none"
             />
 
             <input
               type="password"
               placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 rounded-md bg-slate-900 text-white placeholder-gray-400 focus:outline-none"
             />
 
             <input
               type="password"
               placeholder="Re-enter Password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
               className="w-full px-4 py-3 rounded-md bg-slate-900 text-white placeholder-gray-400 focus:outline-none"
             />
 
-            <button className="w-full bg-slate-900 text-white py-3 rounded-full mt-6 hover:bg-slate-800 transition">
+            <button 
+            className="w-full bg-slate-900 text-white py-3 rounded-full mt-6 hover:bg-slate-800 transition"
+              onClick={async () => {
+              if (password !== confirm) {
+                alert("Passwords do not match");
+                return;
+              }
+
+              const formData = new FormData();
+              formData.append("email", email);
+              formData.append("username", username);
+              formData.append("password", password);
+
+              const res = await fetch("http://localhost:8000/auth/signup", {
+                method: "POST",
+                body: formData,
+              });
+
+
+              const data = await res.json();
+
+              if (res.ok) {
+                alert("Signup successful. Please login.");
+                navigate("/login");
+              } else {
+                alert(data.detail || "Signup failed");
+              }
+            }}>
               SIGN UP
             </button>
           </div>
