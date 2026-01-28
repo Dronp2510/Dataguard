@@ -44,7 +44,7 @@ class EncryptedKey(Base):
     vault_item_id = Column(String, ForeignKey("vault_items.id"))
     user_id = Column(String)
     encrypted_key = Column(String)
-
+    iv = Column(String, nullable=False) 
 
 class User(Base):
     __tablename__ = "users"

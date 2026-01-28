@@ -1,5 +1,13 @@
 import { X } from "lucide-react";
 import { useState } from "react";
+import { getUserId } from "../utils/session";
+import { getMasterKey } from "../utils/keyStore";
+import {
+  generateFileKey,
+  encryptFile,
+  encryptFileKey,
+} from "../utils/crypto";
+
 
 const API_BASE = "http://localhost:8000"; // adjust if needed
 
@@ -33,27 +41,49 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
   // UPLOAD FILE
   // -------------------------
   const handleUploadFile = async () => {
-    if (!selectedFile) return;
+  if (!selectedFile) return;
 
-    const formData = new FormData();
-    formData.append("encrypted_file", selectedFile); // NOT encrypted yet
-    formData.append("filename", selectedFile.name);
-    formData.append("mime_type", selectedFile.type || "application/octet-stream");
-    formData.append("encrypted_key", "test-key");
-    formData.append("iv", "test-iv");
+  const userId = getUserId();
+  const masterKey = getMasterKey();
 
-    if (parentFolderId) {
-      formData.append("parent_folder_id", parentFolderId);
-    }
+  if (!masterKey) {
+    alert("Encryption key missing. Please login again.");
+    return;
+  }
 
-    await fetch(`${API_BASE}/vault/files`, {
-      method: "POST",
-      body: formData,
-    });
+  // 🔐 Step 1: Generate per-file key
+  const fileKey = await generateFileKey();
 
-    onSuccess?.();
-//     onClose();
-  };
+  // 🔐 Step 2: Encrypt file
+  const { encryptedBuffer, iv } = await encryptFile(selectedFile, fileKey);
+
+  // 🔐 Step 3: Encrypt file key using master key
+  const { encryptedKey, keyIv } = await encryptFileKey(fileKey, masterKey);
+
+  // Convert encrypted buffer to Blob for upload
+  const encryptedBlob = new Blob([encryptedBuffer]);
+
+  const formData = new FormData();
+  formData.append("encrypted_file", encryptedBlob);
+  formData.append("filename", selectedFile.name);
+  formData.append("mime_type", selectedFile.type || "application/octet-stream");
+  formData.append("encrypted_key", encryptedKey);
+  formData.append("iv", iv);
+  formData.append("key_iv", keyIv);
+  formData.append("user_id", userId);
+
+  if (parentFolderId) {
+    formData.append("parent_folder_id", parentFolderId);
+  }
+
+  await fetch(`${API_BASE}/vault/files`, {
+    method: "POST",
+    body: formData,
+  });
+
+  onSuccess?.();
+};
+
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">

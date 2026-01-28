@@ -3,6 +3,8 @@ import ShareModal from "../components/ShareModal";
 import AddItemModal from "../components/AddItemModal";
 import FilePreviewModal from "../components/FilePreviewModal";
 import { useEffect, useState } from "react";
+import { getUserId } from "../utils/session";
+
 
 
 function Vaults() {
@@ -11,9 +13,11 @@ function Vaults() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [currentFolderId, setCurrentFolderId] = useState(null);
   const fetchVaultItems = (parentId = null) => {
+
+    const userId = getUserId();
     const url = parentId
-        ? `http://localhost:8000/vault/items?parent_id=${parentId}`
-        : `http://localhost:8000/vault/items`;
+      ? `http://localhost:8000/vault/items?parent_id=${parentId}&user_id=${userId}`
+      : `http://localhost:8000/vault/items?user_id=${userId}`;
 
     fetch(url)
     .then(res => res.json())

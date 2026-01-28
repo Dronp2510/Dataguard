@@ -2,6 +2,10 @@ import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { setSession } from "../utils/session";
+import { deriveMasterKey } from "../utils/crypto";
+import { setMasterKey } from "../utils/keyStore";
+import { getSalt } from "../utils/session";
+
 
 
 function Login() {
@@ -69,13 +73,17 @@ function Login() {
             const data = await res.json();
 
             if (res.ok) {
-              setSession({
-                user_id: data.user_id,
-                salt: data.salt,
-              });
+                setSession({
+                  user_id: data.user_id,
+                  salt: data.salt,
+                });
 
-              navigate("/vaults");
-            } else {
+                // 🔐 derive master key right here
+                const masterKey = await deriveMasterKey(password, data.salt);
+                setMasterKey(masterKey);
+
+                navigate("/vaults");
+            }else {
               alert(data.detail || "Login failed");
             }
           }}  >

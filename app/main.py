@@ -38,6 +38,7 @@ async def upload_encrypted_file(
     parent_folder_id: str | None = Form(None),
     encrypted_key: str = Form(...),
     iv: str = Form(...),
+    key_iv: str = Form(...),
     user_id: str = Form(...)
 ):
     db = SessionLocal()
@@ -68,7 +69,8 @@ async def upload_encrypted_file(
         key = EncryptedKey(
             vault_item_id=vault_item.id,
             user_id=user_id,
-            encrypted_key=encrypted_key
+            encrypted_key=encrypted_key,
+            iv=key_iv
         )
         db.add(key)
 
@@ -118,6 +120,7 @@ def download_encrypted_file(file_id: str):
                 "mime_type": file.mime_type,
                 "iv": file.iv,
                 "encrypted_key": key.encrypted_key,
+                "key_iv": key.iv,
             },
             "download_url": f"/vault/files/{file_id}/blob"
         }
