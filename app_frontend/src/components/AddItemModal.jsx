@@ -28,6 +28,8 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
       formData.append("parent_id", parentFolderId);
     }
 
+    formData.append("user_id", currentUserId);
+    
     await fetch(`${API_BASE}/vault/folders`, {
       method: "POST",
       body: formData,
