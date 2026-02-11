@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from uuid import uuid4
 from pathlib import Path
 from .models import VaultItem, VaultItemType, Folder, File as VaultFile, EncryptedKey, User
@@ -11,6 +11,8 @@ from sqlalchemy.orm import joinedload
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import base64
+from sqlalchemy.orm import Session
+
 
 Base.metadata.create_all(bind=engine)
 
@@ -291,3 +293,40 @@ def delete_item(item_id: str):
         return {"message": "Deleted successfully"}
     finally:
         db.close()
+
+#-------------------
+# FOR THE DASHBOARD
+#-------------------
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@app.get("/recent")
+def get_recent_uploads(db: Session = Depends(get_db)):
+    files = db.query(VaultFile).all()
+    folders = db.query(Folder).all()
+
+    combined = []
+
+    for file in files:
+        combined.append({
+            "id": file.id,
+            "name": file.filename,
+            "type": "file",
+            "created_at": file.created_at
+        })
+
+    for folder in folders:
+        combined.append({
+            "id": folder.id,
+            "name": folder.name,
+            "type": "folder",
+            "created_at": folder.created_at
+        })
+
+    combined.sort(key=lambda x: x["created_at"], reverse=True)
+
+    return combined[:5]  # latest 5

@@ -7,6 +7,7 @@ import {
   encryptFile,
   encryptFileKey,
 } from "../utils/crypto";
+import { useNavigate } from "react-router-dom";
 
 
 const API_BASE = "http://localhost:8000"; // adjust if needed
@@ -15,6 +16,8 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
   const [mode, setMode] = useState(null);
   const [folderName, setFolderName] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
+  const navigate = useNavigate();
+
 
   // -------------------------
   // CREATE FOLDER

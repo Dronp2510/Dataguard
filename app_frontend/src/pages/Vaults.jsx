@@ -52,7 +52,7 @@ function Vaults() {
   const folders = items.filter(i => i.type === "folder");
   const files = items.filter(i => i.type === "file");
   const [previewFile, setPreviewFile] = useState(null);
-
+  
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -232,3 +232,8 @@ function Vaults() {
 }
 
 export default Vaults;
+export async function fetchRecent() {
+  const res = await fetch("http://localhost:8000/recent");
+  if (!res.ok) throw new Error("Failed to fetch recent uploads");
+  return res.json();
+}
