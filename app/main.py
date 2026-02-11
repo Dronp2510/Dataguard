@@ -233,3 +233,61 @@ def login(email: str = Form(...), password: str = Form(...)):
         }
     finally:
         db.close()
+
+
+# -------------------------
+# RENAME FILE / FOLDER
+# -------------------------
+@app.put("/vault/items/{item_id}/rename")
+def rename_item(item_id: str, new_name: str = Form(...)):
+    db = SessionLocal()
+    try:
+        item = db.query(VaultItem).get(item_id)
+        if not item:
+            raise HTTPException(404, "Item not found")
+
+        if item.type.value == "folder":
+            folder = db.query(Folder).get(item_id)
+            folder.name = new_name
+
+        else:
+            file = db.query(VaultFile).get(item_id)
+            file.filename = new_name
+
+        db.commit()
+        return {"message": "Renamed successfully"}
+    finally:
+        db.close()
+
+# -------------------------
+# DELETE FILE / FOLDER
+# -------------------------
+def delete_recursive(db, item_id: str):
+    children = db.query(VaultItem).filter(VaultItem.parent_id == item_id).all()
+    for child in children:
+        delete_recursive(db, child.id)
+
+    item = db.query(VaultItem).get(item_id)
+
+    if item.type.value == "file":
+        file = db.query(VaultFile).get(item_id)
+        if file and os.path.exists(file.storage_path):
+            os.remove(file.storage_path)
+        db.query(VaultFile).filter_by(id=item_id).delete()
+        db.query(EncryptedKey).filter_by(vault_item_id=item_id).delete()
+
+    elif item.type.value == "folder":
+        db.query(Folder).filter_by(id=item_id).delete()
+
+    db.query(VaultItem).filter_by(id=item_id).delete()
+
+
+@app.delete("/vault/items/{item_id}")
+def delete_item(item_id: str):
+    db = SessionLocal()
+    try:
+        delete_recursive(db, item_id)
+        db.commit()
+        return {"message": "Deleted successfully"}
+    finally:
+        db.close()
