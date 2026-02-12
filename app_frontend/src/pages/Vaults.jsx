@@ -233,7 +233,19 @@ function Vaults() {
 
 export default Vaults;
 export async function fetchRecent() {
-  const res = await fetch("http://localhost:8000/recent");
-  if (!res.ok) throw new Error("Failed to fetch recent uploads");
+  const userId = getUserId();
+
+  if (!userId) {
+    throw new Error("User not logged in");
+  }
+
+  const res = await fetch(
+    `http://127.0.0.1:8000/recent?user_id=${userId}`
+  );
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch recent uploads");
+  }
+
   return res.json();
 }

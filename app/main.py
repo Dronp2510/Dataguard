@@ -305,28 +305,33 @@ def get_db():
         db.close()
 
 @app.get("/recent")
-def get_recent_uploads(db: Session = Depends(get_db)):
-    files = db.query(VaultFile).all()
-    folders = db.query(Folder).all()
+def get_recent_uploads(user_id: str, db: Session = Depends(get_db)):
+    items = (
+        db.query(VaultItem, VaultFile, Folder)
+        .outerjoin(VaultFile, VaultItem.id == VaultFile.id)
+        .outerjoin(Folder, VaultItem.id == Folder.id)
+        .filter(VaultItem.owner_id == user_id)
+        .order_by(VaultItem.created_at.desc())
+        .limit(10)
+        .all()
+    )
 
-    combined = []
+    result = []
+    for vault_item, file, folder in items:
+        if vault_item.type == VaultItemType.file and file:
+            result.append({
+                "id": vault_item.id,
+                "name": file.filename,
+                "type": "file",
+                "created_at": vault_item.created_at
+            })
+        elif vault_item.type == VaultItemType.folder and folder:
+            result.append({
+                "id": vault_item.id,
+                "name": folder.name,
+                "type": "folder",
+                "created_at": vault_item.created_at
+            })
 
-    for file in files:
-        combined.append({
-            "id": file.id,
-            "name": file.filename,
-            "type": "file",
-            "created_at": file.created_at
-        })
+    return result
 
-    for folder in folders:
-        combined.append({
-            "id": folder.id,
-            "name": folder.name,
-            "type": "folder",
-            "created_at": folder.created_at
-        })
-
-    combined.sort(key=lambda x: x["created_at"], reverse=True)
-
-    return combined[:5]  # latest 5
