@@ -55,6 +55,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     salt = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
+    last_login = Column(DateTime, nullable=True)    
 
 
 class Share(Base):

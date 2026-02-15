@@ -73,15 +73,23 @@ function Login() {
             const data = await res.json();
 
             if (res.ok) {
+                 // ✅ 1. Store full user info for UI + refresh persistence
+                localStorage.setItem("user", JSON.stringify({
+                  user_id: data.user_id,
+                  username: data.username,
+                  email: data.email,
+                }));
+
+                // ✅ 2. Keep your encryption session logic (DO NOT REMOVE)
                 setSession({
                   user_id: data.user_id,
                   salt: data.salt,
                 });
 
-                // 🔐 derive master key right here
-                const masterKey = await deriveMasterKey(password, data.salt);
-                setMasterKey(masterKey);
+              const masterKey = await deriveMasterKey(password, data.salt);
+              setMasterKey(masterKey);
 
+                // ✅ 3. Navigate
                 navigate("/vaults");
             }else {
               alert(data.detail || "Login failed");

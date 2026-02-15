@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from uuid import uuid4
 from pathlib import Path
 from .models import VaultItem, VaultItemType, Folder, File as VaultFile, EncryptedKey, User
@@ -11,8 +11,7 @@ from sqlalchemy.orm import joinedload
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import base64
-from sqlalchemy.orm import Session
-
+from datetime import datetime
 
 Base.metadata.create_all(bind=engine)
 
@@ -227,111 +226,18 @@ def login(email: str = Form(...), password: str = Form(...)):
 
         if not user or not check_password_hash(user.password_hash, password):
             raise HTTPException(status_code=401, detail="Invalid credentials")
+        #update last login time
+        user.last_login = datetime.utcnow()
+        db.commit()
 
         return {
             "message": "Login success",
             "user_id": user.id,
-            "salt": user.salt
+            "username": user.username,
+            "email": user.email,
+            "salt": user.salt,
+            "last_login": user.last_login
         }
     finally:
         db.close()
-
-
-# -------------------------
-# RENAME FILE / FOLDER
-# -------------------------
-@app.put("/vault/items/{item_id}/rename")
-def rename_item(item_id: str, new_name: str = Form(...)):
-    db = SessionLocal()
-    try:
-        item = db.query(VaultItem).get(item_id)
-        if not item:
-            raise HTTPException(404, "Item not found")
-
-        if item.type.value == "folder":
-            folder = db.query(Folder).get(item_id)
-            folder.name = new_name
-
-        else:
-            file = db.query(VaultFile).get(item_id)
-            file.filename = new_name
-
-        db.commit()
-        return {"message": "Renamed successfully"}
-    finally:
-        db.close()
-
-# -------------------------
-# DELETE FILE / FOLDER
-# -------------------------
-def delete_recursive(db, item_id: str):
-    children = db.query(VaultItem).filter(VaultItem.parent_id == item_id).all()
-    for child in children:
-        delete_recursive(db, child.id)
-
-    item = db.query(VaultItem).get(item_id)
-
-    if item.type.value == "file":
-        file = db.query(VaultFile).get(item_id)
-        if file and os.path.exists(file.storage_path):
-            os.remove(file.storage_path)
-        db.query(VaultFile).filter_by(id=item_id).delete()
-        db.query(EncryptedKey).filter_by(vault_item_id=item_id).delete()
-
-    elif item.type.value == "folder":
-        db.query(Folder).filter_by(id=item_id).delete()
-
-    db.query(VaultItem).filter_by(id=item_id).delete()
-
-
-@app.delete("/vault/items/{item_id}")
-def delete_item(item_id: str):
-    db = SessionLocal()
-    try:
-        delete_recursive(db, item_id)
-        db.commit()
-        return {"message": "Deleted successfully"}
-    finally:
-        db.close()
-
-#-------------------
-# FOR THE DASHBOARD
-#-------------------
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-@app.get("/recent")
-def get_recent_uploads(user_id: str, db: Session = Depends(get_db)):
-    items = (
-        db.query(VaultItem, VaultFile, Folder)
-        .outerjoin(VaultFile, VaultItem.id == VaultFile.id)
-        .outerjoin(Folder, VaultItem.id == Folder.id)
-        .filter(VaultItem.owner_id == user_id)
-        .order_by(VaultItem.created_at.desc())
-        .limit(10)
-        .all()
-    )
-
-    result = []
-    for vault_item, file, folder in items:
-        if vault_item.type == VaultItemType.file and file:
-            result.append({
-                "id": vault_item.id,
-                "name": file.filename,
-                "type": "file",
-                "created_at": vault_item.created_at
-            })
-        elif vault_item.type == VaultItemType.folder and folder:
-            result.append({
-                "id": vault_item.id,
-                "name": folder.name,
-                "type": "folder",
-                "created_at": vault_item.created_at
-            })
-
-    return result
 

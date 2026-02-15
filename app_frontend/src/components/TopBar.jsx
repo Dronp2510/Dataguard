@@ -1,4 +1,5 @@
 import { Bell } from "lucide-react";
+import UserDropdown from "./UserDropdown";
 
 function TopBar() {
   return (
@@ -24,9 +25,14 @@ function TopBar() {
         </button>
 
         {/* User avatar */}
-        <div className="w-9 h-9 rounded-full bg-slate-900 text-white flex items-center justify-center font-semibold">
-          U
-        </div>
+          <UserDropdown
+    user={{
+      username: "Rajvi",
+      email: "rajvi@dataguard.com",
+      totalDocuments: 12,
+      lastLogin: "Today 10:32 PM",
+    }}
+  />
       </div>
     </header>
   );
