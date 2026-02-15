@@ -1,25 +1,46 @@
 import { useEffect, useState } from "react";
 import { Folder, FileText, Share2 } from "lucide-react";
-import { fetchRecent } from "../pages/Vaults";
+//import { fetchRecent } from "../pages/Vaults";
 
 function Home() {
   const [recent, setRecent] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadRecent() {
-      try {
-        const data = await fetchRecent();
-        setRecent(data);
-      } catch (err) {
-        console.error("Failed to load recent uploads:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
+  async function loadRecent() {
+    try {
+      const user = JSON.parse(localStorage.getItem("user"));
 
-    loadRecent();
-  }, []);
+      if (!user?.user_id) {
+        console.error("No user found");
+        return;
+      }
+
+      const res = await fetch(
+        `http://localhost:8000/vault/items?user_id=${user.user_id}`
+      );
+
+      const data = await res.json();
+
+      if (res.ok) {
+        // sort newest first (based on created_at)
+        const sorted = [...data].sort(
+          (a, b) => new Date(b.created_at) - new Date(a.created_at)
+        );
+
+        // take only latest 3 items for dashboard
+        setRecent(sorted.slice(0, 3));
+      }
+    } catch (err) {
+      console.error("Failed to load recent uploads:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  loadRecent();
+}, []);
+
 
   return (
     <div className="space-y-8">

@@ -185,7 +185,6 @@ def list_vault_items(parent_id: str | None = None, user_id: str | None = None):
     finally:
         db.close()
 
-
 # -------------------------
 # AUTH - SIGNUP
 # -------------------------
