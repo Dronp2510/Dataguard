@@ -6,11 +6,13 @@ import { useEffect, useState } from "react";
 import { getUserId } from "../utils/session";
 import RenameModal from "../components/RenameModal";
 import DeleteConfirmModal from "../components/DeleteConfirmModal";
+import { getMasterKey } from "../utils/keyStore";
 
 
 
 
 function Vaults() {
+  const [ready, setReady] = useState(false);
   const [items, setItems] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -18,6 +20,19 @@ function Vaults() {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [renameItem, setRenameItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
+
+  useEffect(() => {
+    const waitForKey = setInterval(() => {
+      const key = getMasterKey();
+      if (key) {
+        setReady(true);
+        clearInterval(waitForKey);
+      }
+    }, 50);
+
+    return () => clearInterval(waitForKey);
+  }, []);
+
 
   const fetchVaultItems = (parentId = null) => {
 
@@ -32,8 +47,10 @@ function Vaults() {
     .catch(err => console.error("Failed to load vault items", err));
 };
   useEffect(() => {
-  fetchVaultItems(currentFolderId);
-  }, [currentFolderId]);
+    if (ready) {
+      fetchVaultItems(currentFolderId);
+    }
+  }, [currentFolderId, ready]);
 
   const handleOpenFile = (file) => {
         setPreviewFile(file);
@@ -53,6 +70,8 @@ function Vaults() {
   const files = items.filter(i => i.type === "file");
   const [previewFile, setPreviewFile] = useState(null);
   
+  if (!ready) return null;
+
   return (
     <div className="space-y-6">
       {/* Header */}
