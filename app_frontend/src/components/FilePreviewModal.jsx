@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getMasterKey } from "../utils/keyStore";
 import { decryptFileKey, decryptFile } from "../utils/crypto";
+import { apiFetch } from "../utils/api";
 
 
 function FilePreviewModal({ file, onClose }) {
@@ -18,18 +19,14 @@ function FilePreviewModal({ file, onClose }) {
       }
 
       // 1️⃣ Get metadata
-      const metaRes = await fetch(
-        `http://localhost:8000/vault/files/${file.id}/download`
-      );
+      const metaRes = await apiFetch(`/vault/files/${file.id}/download`);
       const metaData = await metaRes.json();
 
-      const { filename, mime_type, iv, encrypted_key, key_iv } =
+      const { mime_type, iv, encrypted_key, key_iv } =
         metaData.metadata;
 
       // 2️⃣ Download encrypted blob
-      const blobRes = await fetch(
-        `http://localhost:8000${metaData.download_url}`
-      );
+      const blobRes = await apiFetch(metaData.download_url);
       const encryptedBuffer = await blobRes.arrayBuffer();
 
       // 3️⃣ Decrypt file key

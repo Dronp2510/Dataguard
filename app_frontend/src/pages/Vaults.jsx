@@ -3,13 +3,10 @@ import ShareModal from "../components/ShareModal";
 import AddItemModal from "../components/AddItemModal";
 import FilePreviewModal from "../components/FilePreviewModal";
 import { useEffect, useState } from "react";
-import { getUserId } from "../utils/session";
 import RenameModal from "../components/RenameModal";
 import DeleteConfirmModal from "../components/DeleteConfirmModal";
 import { getMasterKey } from "../utils/keyStore";
-
-
-
+import { apiFetch } from "../utils/api";
 
 function Vaults() {
   const [ready, setReady] = useState(false);
@@ -20,6 +17,7 @@ function Vaults() {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [renameItem, setRenameItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
+  const [previewFile, setPreviewFile] = useState(null);
 
   useEffect(() => {
     const waitForKey = setInterval(() => {
@@ -29,52 +27,42 @@ function Vaults() {
         clearInterval(waitForKey);
       }
     }, 50);
-
     return () => clearInterval(waitForKey);
   }, []);
 
-
-  const fetchVaultItems = (parentId = null) => {
-
-    const userId = getUserId();
-    const url = parentId
-      ? `http://localhost:8000/vault/items?parent_id=${parentId}&user_id=${userId}`
-      : `http://localhost:8000/vault/items?user_id=${userId}`;
-
-    fetch(url)
-    .then(res => res.json())
-    .then(data => setItems(data))
-    .catch(err => console.error("Failed to load vault items", err));
-};
-  useEffect(() => {
-    if (ready) {
-      fetchVaultItems(currentFolderId);
-    }
-  }, [currentFolderId, ready]);
-
-  const handleOpenFile = (file) => {
-        setPreviewFile(file);
-    };
-  
-    useEffect(() => {
-  const handleClickOutside = () => {
-    setOpenMenuId(null);
+  const fetchVaultItems = async (parentId = null) => {
+    const query = parentId ? `?parent_id=${encodeURIComponent(parentId)}` : "";
+    const res = await apiFetch(`/vault/items${query}`);
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   };
 
-  window.addEventListener("click", handleClickOutside);
-  return () => window.removeEventListener("click", handleClickOutside);
-}, []);
+  useEffect(() => {
+    if (!ready) return;
+    let active = true;
+    (async () => {
+      try {
+        const data = await fetchVaultItems(currentFolderId);
+        if (active) setItems(data);
+      } catch (err) {
+        console.error("Failed to load vault items", err);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [currentFolderId, ready]);
 
+  useEffect(() => {
+    const handleClickOutside = () => setOpenMenuId(null);
+    window.addEventListener("click", handleClickOutside);
+    return () => window.removeEventListener("click", handleClickOutside);
+  }, []);
 
-  const folders = items.filter(i => i.type === "folder");
-  const files = items.filter(i => i.type === "file");
-  const [previewFile, setPreviewFile] = useState(null);
-  
   if (!ready) return null;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold">Your Vaults</h2>
         <button
@@ -86,125 +74,107 @@ function Vaults() {
       </div>
 
       {currentFolderId && (
-          <button
-            className="text-sm text-blue-600"
-            onClick={() => setCurrentFolderId(null)}
-          >
-            ← Back
-          </button>
-        )}
+        <button
+          className="text-sm text-blue-600"
+          onClick={() => setCurrentFolderId(null)}
+        >
+          Back
+        </button>
+      )}
 
-      {/* Vault list */}
       <div className="bg-white rounded-lg shadow-sm divide-y">
-          {items.map((item) => (
-  <div
-    key={item.id}
-    className="flex justify-between items-center px-6 py-4 hover:bg-gray-50"
-  >
-    {/* LEFT SIDE */}
-    <div
-      className="flex items-center gap-4 cursor-pointer"
-      onClick={() => {
-        if (item.type === "folder") {
-          setCurrentFolderId(item.id);
-        } else {
-          handleOpenFile(item);
-        }
-      }}
-    >
-      {item.type === "folder" ? (
-        <Folder className="text-yellow-500" />
-      ) : (
-        <FileText className="text-gray-500" />
-      )}
-
-      <div>
-        <p className="font-medium">{item.name}</p>
-        <p className="text-sm text-gray-500">
-          Created: {new Date(item.created_at).toLocaleDateString()}
-        </p>
-      </div>
-    </div>
-
-    {/* RIGHT SIDE ACTIONS */}
-    <div className="flex items-center gap-4 relative">
-      {/* Share only for files */}
-      {item.type === "file" && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedFile(item);
-          }}
-        >
-          <Share2 size={18} />
-        </button>
-      )}
-
-      {/* 3 Dots */}
-      <div className="relative"
-       onClick={(e) => e.stopPropagation()}
-       >
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpenMenuId(openMenuId === item.id ? null : item.id);
-          }}
-        >
-          <MoreVertical size={18} />
-        </button>
-
-        {openMenuId === item.id && (
-          <div className="absolute right-0 mt-2 w-32 bg-white border rounded shadow-md z-50">
-            <button
-              className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                setRenameItem(item);
-                setOpenMenuId(null);
+        {items.map((item) => (
+          <div
+            key={item.id}
+            className="flex justify-between items-center px-6 py-4 hover:bg-gray-50"
+          >
+            <div
+              className="flex items-center gap-4 cursor-pointer"
+              onClick={() => {
+                if (item.type === "folder") setCurrentFolderId(item.id);
+                else setPreviewFile(item);
               }}
             >
-              Rename
-            </button>
+              {item.type === "folder" ? (
+                <Folder className="text-yellow-500" />
+              ) : (
+                <FileText className="text-gray-500" />
+              )}
 
+              <div>
+                <p className="font-medium">{item.name}</p>
+                <p className="text-sm text-gray-500">
+                  Created: {new Date(item.created_at).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
 
-            <button
-              className="block w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                setDeleteItem(item);
-                setOpenMenuId(null);
-              }}
-            >
-              Delete
-            </button>
+            <div className="flex items-center gap-4 relative">
+              {item.type === "file" && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedFile(item);
+                  }}
+                >
+                  <Share2 size={18} />
+                </button>
+              )}
 
+              <div className="relative" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenMenuId(openMenuId === item.id ? null : item.id);
+                  }}
+                >
+                  <MoreVertical size={18} />
+                </button>
+
+                {openMenuId === item.id && (
+                  <div className="absolute right-0 mt-2 w-32 bg-white border rounded shadow-md z-50">
+                    <button
+                      className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setRenameItem(item);
+                        setOpenMenuId(null);
+                      }}
+                    >
+                      Rename
+                    </button>
+
+                    <button
+                      className="block w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteItem(item);
+                        setOpenMenuId(null);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        )}
+        ))}
       </div>
-    </div>
-  </div>
-))}
 
-        </div>
-
-
-      {/* Modals */}
-      
       {renameItem && (
         <RenameModal
           item={renameItem}
           onClose={() => setRenameItem(null)}
-          onRename={(newName) => {
-            fetch(`http://localhost:8000/vault/items/${renameItem.id}/rename`, {
+          onRename={async (newName) => {
+            await apiFetch(`/vault/items/${renameItem.id}/rename`, {
               method: "PUT",
-              headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-              },
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
               body: `new_name=${encodeURIComponent(newName)}`,
-            }).then(() => {
-              fetchVaultItems(currentFolderId);
-              setRenameItem(null);
             });
+            const data = await fetchVaultItems(currentFolderId);
+            setItems(data);
+            setRenameItem(null);
           }}
         />
       )}
@@ -213,58 +183,35 @@ function Vaults() {
         <DeleteConfirmModal
           item={deleteItem}
           onClose={() => setDeleteItem(null)}
-          onDelete={() => {
-            fetch(`http://localhost:8000/vault/items/${deleteItem.id}`, {
-              method: "DELETE",
-            }).then(() => {
-              fetchVaultItems(currentFolderId);
-              setDeleteItem(null);
-            });
+          onDelete={async () => {
+            await apiFetch(`/vault/items/${deleteItem.id}`, { method: "DELETE" });
+            const data = await fetchVaultItems(currentFolderId);
+            setItems(data);
+            setDeleteItem(null);
           }}
         />
       )}
 
-      <ShareModal
-        file={selectedFile}
-        onClose={() => setSelectedFile(null)}
-      />
+      <ShareModal file={selectedFile} onClose={() => setSelectedFile(null)} />
 
       {showAddModal && (
         <AddItemModal
           parentFolderId={currentFolderId}
           onClose={() => setShowAddModal(false)}
           onSuccess={() => {
-            fetchVaultItems(currentFolderId);
-            setShowAddModal(false);
+            fetchVaultItems(currentFolderId).then((data) => {
+              setItems(data);
+              setShowAddModal(false);
+            });
           }}
         />
-  )}
+      )}
 
       {previewFile && (
-          <FilePreviewModal
-            file={previewFile}
-            onClose={() => setPreviewFile(null)}
-          />
-        )}
+        <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
+      )}
     </div>
   );
 }
 
 export default Vaults;
-export async function fetchRecent() {
-  const userId = getUserId();
-
-  if (!userId) {
-    throw new Error("User not logged in");
-  }
-
-  const res = await fetch(
-    `http://127.0.0.1:8000/recent?user_id=${userId}`
-  );
-
-  if (!res.ok) {
-    throw new Error("Failed to fetch recent uploads");
-  }
-
-  return res.json();
-}

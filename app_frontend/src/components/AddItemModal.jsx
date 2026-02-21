@@ -1,22 +1,18 @@
 import { X } from "lucide-react";
 import { useState } from "react";
-import { getUserId } from "../utils/session";
 import { getMasterKey } from "../utils/keyStore";
 import {
   generateFileKey,
   encryptFile,
   encryptFileKey,
 } from "../utils/crypto";
-import { useNavigate } from "react-router-dom";
+import { apiFetch } from "../utils/api";
 
-
-const API_BASE = "http://localhost:8000"; // adjust if needed
 
 function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
   const [mode, setMode] = useState(null);
   const [folderName, setFolderName] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
-  const navigate = useNavigate();
 
 
   // -------------------------
@@ -31,9 +27,7 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
       formData.append("parent_id", parentFolderId);
     }
 
-    formData.append("user_id", getUserId());
-
-    await fetch(`${API_BASE}/vault/folders`, {
+    await apiFetch("/vault/folders", {
       method: "POST",
       body: formData,
     });
@@ -48,7 +42,6 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
   const handleUploadFile = async () => {
   if (!selectedFile) return;
 
-  const userId = getUserId();
   const masterKey = getMasterKey();
 
   if (!masterKey) {
@@ -75,13 +68,11 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
   formData.append("encrypted_key", encryptedKey);
   formData.append("iv", iv);
   formData.append("key_iv", keyIv);
-  formData.append("user_id", userId);
-
   if (parentFolderId) {
     formData.append("parent_folder_id", parentFolderId);
   }
 
-  await fetch(`${API_BASE}/vault/files`, {
+  await apiFetch("/vault/files", {
     method: "POST",
     body: formData,
   });

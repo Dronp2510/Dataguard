@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { setSession } from "../utils/session";
 import { deriveMasterKey } from "../utils/crypto";
 import { setMasterKey } from "../utils/keyStore";
-import { getSalt } from "../utils/session";
 
 
 
@@ -84,13 +83,14 @@ function Login() {
                 setSession({
                   user_id: data.user_id,
                   salt: data.salt,
+                  token: data.access_token,
                 });
 
               const masterKey = await deriveMasterKey(password, data.salt);
               setMasterKey(masterKey);
 
                 // ✅ 3. Navigate
-                navigate("/vaults");
+                navigate("/");
             }else {
               alert(data.detail || "Login failed");
             }

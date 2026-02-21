@@ -1,4 +1,4 @@
-from sqlalchemy import LargeBinary, Column, String, DateTime, Boolean, ForeignKey, Enum
+from sqlalchemy import Column, String, DateTime, ForeignKey, Enum, Integer, Boolean
 from sqlalchemy.sql import func
 from uuid import uuid4
 from .database import Base
@@ -63,6 +63,36 @@ class Share(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     vault_item_id = Column(String, ForeignKey("vault_items.id"))
+    owner_id = Column(String, ForeignKey("users.id"), nullable=False)
+    token = Column(String, unique=True, nullable=False)
     encrypted_key = Column(String, nullable=False)  # file_key encrypted with share_key
+    key_iv = Column(String, nullable=False)
+    key_salt = Column(String, nullable=False)
     expiry_time = Column(DateTime, nullable=False)
+    max_views = Column(Integer, nullable=True)
+    views = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    token_hash = Column(String, unique=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class ShareAccessLog(Base):
+    __tablename__ = "share_access_logs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    share_id = Column(String, ForeignKey("shares.id"), nullable=False)
+    action = Column(String, nullable=False)
+    viewer_type = Column(String, nullable=False)
+    viewer_label = Column(String, nullable=False)
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now())

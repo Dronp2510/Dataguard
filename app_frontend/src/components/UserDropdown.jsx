@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   User,
   Settings,
@@ -6,10 +7,14 @@ import {
   Folder,
   Clock,
 } from "lucide-react";
-const user = JSON.parse(localStorage.getItem("user"));
+import { clearSession } from "../utils/session";
+import { clearMasterKey } from "../utils/keyStore";
+import { apiFetch } from "../utils/api";
 
 function UserDropdown() {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   return (
     <div className="relative">
@@ -67,7 +72,19 @@ function UserDropdown() {
               Settings
             </button>
 
-            <button className="flex items-center w-full px-3 py-2 text-sm rounded-lg text-red-600 hover:bg-red-50">
+            <button
+              className="flex items-center w-full px-3 py-2 text-sm rounded-lg text-red-600 hover:bg-red-50"
+              onClick={async () => {
+                try {
+                  await apiFetch("/auth/logout", { method: "POST" });
+                } catch {
+                  // Client cleanup should proceed even if request fails.
+                }
+                clearMasterKey();
+                clearSession();
+                navigate("/login");
+              }}
+            >
               <LogOut className="w-4 h-4 mr-2" />
               Logout
             </button>

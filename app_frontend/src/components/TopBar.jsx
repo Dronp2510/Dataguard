@@ -25,14 +25,7 @@ function TopBar() {
         </button>
 
         {/* User avatar */}
-          <UserDropdown
-    user={{
-      username: "Rajvi",
-      email: "rajvi@dataguard.com",
-      totalDocuments: 12,
-      lastLogin: "Today 10:32 PM",
-    }}
-  />
+        <UserDropdown />
       </div>
     </header>
   );

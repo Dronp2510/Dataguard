@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Folder, FileText, Share2 } from "lucide-react";
-//import { fetchRecent } from "../pages/Vaults";
+import { apiFetch } from "../utils/api";
 
 function Home() {
   const [recent, setRecent] = useState([]);
@@ -9,27 +9,12 @@ function Home() {
   useEffect(() => {
   async function loadRecent() {
     try {
-      const user = JSON.parse(localStorage.getItem("user"));
-
-      if (!user?.user_id) {
-        console.error("No user found");
-        return;
-      }
-
-      const res = await fetch(
-        `http://localhost:8000/vault/items?user_id=${user.user_id}`
-      );
+      const res = await apiFetch("/vault/recent?limit=3");
 
       const data = await res.json();
 
       if (res.ok) {
-        // sort newest first (based on created_at)
-        const sorted = [...data].sort(
-          (a, b) => new Date(b.created_at) - new Date(a.created_at)
-        );
-
-        // take only latest 3 items for dashboard
-        setRecent(sorted.slice(0, 3));
+        setRecent(data);
       }
     } catch (err) {
       console.error("Failed to load recent uploads:", err);
