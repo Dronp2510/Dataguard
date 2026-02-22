@@ -11,6 +11,8 @@ import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ShareAccess from "./pages/ShareAccess";
+import Landing from "./pages/Landing";
+
 
 function App() {
   const [ready, setReady] = useState(false);
@@ -43,12 +45,15 @@ function App() {
         <Route path="/signup" element={isAuthed ? <Navigate to="/" replace /> : <Signup />} />
         <Route path="/share/:token" element={<ShareAccess />} />
 
-        <Route path="/" element={isAuthed ? <AppLayout /> : <Navigate to="/login" replace />}>
-          <Route index element={<Home />} />
-          <Route path="vaults" element={<Vaults />} />
-          <Route path="activity" element={<Activity />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
+        
+<Route path="/" element={<Landing />} />
+
+<Route path="/app" element={isAuthed ? <AppLayout /> : <Navigate to="/login" replace />}>
+  <Route index element={<Home />} />
+  <Route path="vaults" element={<Vaults />} />
+  <Route path="activity" element={<Activity />} />
+  <Route path="settings" element={<Settings />} />
+</Route>
       </Routes>
     </BrowserRouter>
   );
