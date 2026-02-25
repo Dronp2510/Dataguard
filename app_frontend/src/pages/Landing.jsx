@@ -1,8 +1,52 @@
+import { useEffect, useRef, useState } from "react";
 import LandingNavbar from "../components/LandingNavbar";
 import { Link } from "react-router-dom";
-import { FileText, Key, Link as LinkIcon, Lock, Shield } from "lucide-react";
+import { FileText, Key, Link as LinkIcon, Lock, Server, Shield } from "lucide-react";
 
 function Landing() {
+  const sectionRef = useRef(null);
+  const [isRiskSectionVisible, setIsRiskSectionVisible] = useState(false);
+
+  useEffect(() => {
+    const sectionNode = sectionRef.current;
+    if (!sectionNode) return undefined;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsRiskSectionVisible(true);
+          observer.unobserve(entry.target);
+        }
+      },
+      { threshold: 0.25 }
+    );
+
+    observer.observe(sectionNode);
+
+    return () => observer.disconnect();
+  }, []);
+
+  const riskCards = [
+    {
+      title: "Local Files Can Be Exposed",
+      description:
+        "Documents saved on laptops and desktops are vulnerable to theft, malware, and unauthorized access when devices are lost or compromised.",
+      icon: Lock,
+    },
+    {
+      title: "Cloud Drives Aren't Always Private",
+      description:
+        "Standard storage platforms may secure infrastructure but can still leave metadata, sharing mistakes, or account breaches as major risk points.",
+      icon: Server,
+    },
+    {
+      title: "Every Shared Link Adds Risk",
+      description:
+        "Uncontrolled links can be forwarded, cached, or accessed long after intended use, making sensitive records harder to contain.",
+      icon: LinkIcon,
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-[#F8F9FB]">
       <LandingNavbar />
@@ -41,6 +85,36 @@ function Landing() {
             >
               Explore Features
             </a>
+          </div>
+        </div>
+      </section>
+
+      <section id="security" className="bg-white py-24">
+        <div className="mx-auto max-w-6xl px-6 text-center">
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
+            Your Documents Are More Vulnerable Than You Think
+          </h2>
+
+          <div ref={sectionRef} className="mt-14 grid gap-8 md:grid-cols-3">
+            {riskCards.map((card, index) => {
+              const Icon = card.icon;
+
+              return (
+                <article
+                  key={card.title}
+                  className={[
+                    "group rounded-2xl border border-gray-100 bg-white p-8 shadow-sm transition-all duration-300 hover:-translate-y-2 hover:shadow-lg",
+                    "transform transition duration-700 ease-out",
+                    isRiskSectionVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0",
+                  ].join(" ")}
+                  style={{ transitionDelay: `${index * 120}ms` }}
+                >
+                  <Icon className="mb-6 text-[#2563EB] transition-transform duration-300 group-hover:scale-110" size={40} />
+                  <h3 className="mb-3 text-xl font-semibold text-slate-900">{card.title}</h3>
+                  <p className="text-sm leading-relaxed text-gray-600">{card.description}</p>
+                </article>
+              );
+            })}
           </div>
         </div>
       </section>
