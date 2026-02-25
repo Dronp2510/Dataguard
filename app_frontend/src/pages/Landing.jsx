@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import LandingNavbar from "../components/LandingNavbar";
 import { Link } from "react-router-dom";
-import { FileText, Key, Link as LinkIcon, Lock, Server, Shield } from "lucide-react";
+import { Activity, ArrowRight, FileText, FolderOpen, Key, Link as LinkIcon, Lock, Server, Shield, Share2 } from "lucide-react";
 
 function Landing() {
   const sectionRef = useRef(null);
+  const privacySectionRef = useRef(null);
   const [isRiskSectionVisible, setIsRiskSectionVisible] = useState(false);
+  const [isPrivacySectionVisible, setIsPrivacySectionVisible] = useState(false);
 
   useEffect(() => {
     const sectionNode = sectionRef.current;
@@ -19,6 +21,25 @@ function Landing() {
         }
       },
       { threshold: 0.25 }
+    );
+
+    observer.observe(sectionNode);
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const sectionNode = privacySectionRef.current;
+    if (!sectionNode) return undefined;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsPrivacySectionVisible(true);
+          observer.unobserve(entry.target);
+        }
+      },
+      { threshold: 0.2 }
     );
 
     observer.observe(sectionNode);
@@ -44,6 +65,29 @@ function Landing() {
       description:
         "Uncontrolled links can be forwarded, cached, or accessed long after intended use, making sensitive records harder to contain.",
       icon: LinkIcon,
+    },
+  ];
+
+  const privacyFeatureCards = [
+    {
+      title: "End-to-End Encryption",
+      description: "Every file is encrypted before upload and stays protected in transit and at rest.",
+      icon: Shield,
+    },
+    {
+      title: "Smart Folder Organization",
+      description: "Organize sensitive records with clean structures built for secure workflows at scale.",
+      icon: FolderOpen,
+    },
+    {
+      title: "Secure Sharing with Controls",
+      description: "Share access with permission rules, expirations, and revocation controls for every link.",
+      icon: Share2,
+    },
+    {
+      title: "Real-Time Vault Insights",
+      description: "Track storage activity and security status instantly to stay ahead of risky behavior.",
+      icon: Activity,
     },
   ];
 
@@ -112,6 +156,48 @@ function Landing() {
                   <Icon className="mb-6 text-[#2563EB] transition-transform duration-300 group-hover:scale-110" size={40} />
                   <h3 className="mb-3 text-xl font-semibold text-slate-900">{card.title}</h3>
                   <p className="text-sm leading-relaxed text-gray-600">{card.description}</p>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-gradient-to-b from-white to-[#F8F9FB] pt-30 pb-28">
+        <div className="mx-auto grid max-w-7xl items-center gap-16 px-6 md:grid-cols-2">
+          <div>
+            <h2 className="text-4xl font-bold leading-tight text-slate-900 md:text-5xl">
+              DataGuard Built For{" "}
+              <span className="bg-gradient-to-r from-[#1E3A8A] to-[#2563EB] bg-clip-text text-transparent">
+                Privacy-First
+              </span>{" "}
+              Storage
+            </h2>
+            <p className="mt-6 max-w-md leading-relaxed text-gray-600">
+              DataGuard is designed around privacy-first encrypted storage, so your files remain protected by default with zero-knowledge security and controlled access at every step.
+            </p>
+          </div>
+
+          <div ref={privacySectionRef} className="flex flex-col gap-6">
+            {privacyFeatureCards.map((card, index) => {
+              const Icon = card.icon;
+
+              return (
+                <article
+                  key={card.title}
+                  className={[
+                    "group rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-blue-200 hover:bg-blue-50/30 hover:shadow-xl",
+                    "transform transition duration-700 ease-out",
+                    isPrivacySectionVisible ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0",
+                  ].join(" ")}
+                  style={{ transitionDelay: `${index * 120}ms` }}
+                >
+                  <div className="flex items-center justify-between">
+                    <Icon className="h-6 w-6 text-slate-700 transition-colors group-hover:text-blue-600" />
+                    <ArrowRight className="h-4 w-4 text-gray-400 transition-transform group-hover:translate-x-1" />
+                  </div>
+                  <h3 className="mt-3 text-lg font-semibold text-slate-900">{card.title}</h3>
+                  <p className="mt-2 text-sm text-gray-600">{card.description}</p>
                 </article>
               );
             })}
