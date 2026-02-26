@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import LandingNavbar from "../components/LandingNavbar";
+import HowItWorks from "../components/HowItWorks";
+import ZeroKnowledgeSection from "../components/ZeroKnowledgeSection";
+import WhoIsDataGuardFor from "../components/WhoIsDataGuardFor";
 import { Link } from "react-router-dom";
 import { Activity, ArrowRight, FileText, FolderOpen, Key, Link as LinkIcon, Lock, Server, Shield, Share2 } from "lucide-react";
 
@@ -204,6 +207,10 @@ function Landing() {
           </div>
         </div>
       </section>
+
+      <HowItWorks />
+      <ZeroKnowledgeSection />
+      <WhoIsDataGuardFor />
 
       <style>
         {`
