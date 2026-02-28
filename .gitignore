@@ -5,3 +5,5 @@ __pycache__/
 .venv/
 secure_storage/
 tests/
+app_frontend/.env
+app_frontend/.env.*
