@@ -11,6 +11,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import base64
 from datetime import datetime, timezone, timedelta
+from collections import deque
+from threading import Lock
+import time
+import hashlib
 
 Base.metadata.create_all(bind=engine)
 
@@ -37,6 +41,35 @@ ensure_sqlite_column("share_access_logs", "ip_address", "VARCHAR")
 ensure_sqlite_column("share_access_logs", "user_agent", "VARCHAR")
 
 app = FastAPI(title="DataGuard MVP")
+
+RATE_BUCKETS: dict[str, deque[float]] = {}
+RATE_LOCK = Lock()
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
+
+
+def client_identity(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for", "").strip()
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def enforce_rate_limit(scope: str, subject: str, max_requests: int, window_seconds: int = 60) -> None:
+    key = f"{scope}:{subject}"
+    now = time.time()
+    cutoff = now - window_seconds
+    with RATE_LOCK:
+        bucket = RATE_BUCKETS.get(key)
+        if bucket is None:
+            bucket = deque()
+            RATE_BUCKETS[key] = bucket
+        while bucket and bucket[0] < cutoff:
+            bucket.popleft()
+        if len(bucket) >= max_requests:
+            raise HTTPException(status_code=429, detail="Too many requests. Try again shortly.")
+        bucket.append(now)
 
 cors_origins_env = os.getenv("CORS_ORIGINS")
 if cors_origins_env:
@@ -132,7 +165,7 @@ def resolve_viewer_identity(
     db,
     token: str,
     authorization: str | None,
-    guest_id: str | None,
+    request: Request | None,
 ) -> tuple[str, str]:
     if authorization:
         parts = authorization.split(" ", 1)
@@ -149,11 +182,11 @@ def resolve_viewer_identity(
                     pass
 
     token_prefix = token[:8]
-    if guest_id and guest_id.strip():
-        cleaned = guest_id.strip()[:48]
-        return ("guest", f"Share: {cleaned} | Link: {token_prefix}")
-    anon = f"guest-{token_prefix}-{str(uuid4())[:8]}"
-    return ("guest", f"Share: {anon} | Link: {token_prefix}")
+    ip_part = request.client.host if request and request.client and request.client.host else "unknown"
+    ua_part = (request.headers.get("user-agent") or "")[:160] if request else ""
+    fingerprint_src = f"{token}|{ip_part}|{ua_part}"
+    guest_fp = hashlib.sha256(fingerprint_src.encode("utf-8")).hexdigest()[:12]
+    return ("guest", f"Guest: {guest_fp} | Link: {token_prefix}")
 
 
 def create_share_access_log(
@@ -183,6 +216,7 @@ def create_share_access_log(
 # -------------------------
 @app.post("/vault/files")
 async def upload_encrypted_file(
+    request: Request,
     encrypted_file: UploadFile = File(...),
     filename: str = Form(...),
     mime_type: str = Form(...),
@@ -194,6 +228,8 @@ async def upload_encrypted_file(
 ):
     db = SessionLocal()
     try:
+        enforce_rate_limit("upload", f"{current_user.id}:{client_identity(request)}", 20, 60)
+
         if parent_folder_id:
             parent = ensure_item_owner(db, parent_folder_id, current_user.id)
             if parent.type != VaultItemType.folder:
@@ -202,8 +238,22 @@ async def upload_encrypted_file(
         stored_name = str(uuid4())
         file_path = STORAGE_PATH / stored_name
 
-        with open(file_path, "wb") as f:
-            f.write(await encrypted_file.read())
+        size_read = 0
+        chunk_size = 1024 * 1024
+        try:
+            with open(file_path, "wb") as f:
+                while True:
+                    chunk = await encrypted_file.read(chunk_size)
+                    if not chunk:
+                        break
+                    size_read += len(chunk)
+                    if size_read > MAX_UPLOAD_BYTES:
+                        raise HTTPException(status_code=413, detail="File exceeds upload size limit")
+                    f.write(chunk)
+        except HTTPException:
+            if file_path.exists():
+                file_path.unlink(missing_ok=True)
+            raise
 
         vault_item = VaultItem(
             type=VaultItemType.file,
@@ -438,6 +488,7 @@ def delete_item(item_id: str, current_user: User = Depends(get_current_user)):
 
 @app.post("/share/create")
 def create_share_link(
+    request: Request,
     file_id: str = Form(...),
     encrypted_key: str = Form(...),
     key_iv: str = Form(...),
@@ -448,6 +499,8 @@ def create_share_link(
 ):
     db = SessionLocal()
     try:
+        enforce_rate_limit("share_create", f"{current_user.id}:{client_identity(request)}", 30, 60)
+
         item = ensure_item_owner(db, file_id, current_user.id)
         if item.type != VaultItemType.file:
             raise HTTPException(status_code=400, detail="Only files can be shared")
@@ -543,11 +596,12 @@ def share_metadata(
 ):
     db = SessionLocal()
     try:
+        enforce_rate_limit("share_meta", f"{token}:{client_identity(request)}", 60, 60)
         share = get_share_or_410(db, token)
         file = db.query(VaultFile).filter(VaultFile.id == share.vault_item_id).first()
         if not file:
             raise HTTPException(status_code=404, detail="File not found")
-        viewer_type, viewer_label = resolve_viewer_identity(db, token, authorization, x_guest_id)
+        viewer_type, viewer_label = resolve_viewer_identity(db, token, authorization, request)
         create_share_access_log(db, share.id, "metadata", viewer_type, viewer_label, request)
         db.commit()
 
@@ -580,12 +634,13 @@ def share_blob(
 ):
     db = SessionLocal()
     try:
+        enforce_rate_limit("share_blob", f"{token}:{client_identity(request)}", 90, 60)
         share = get_share_or_410(db, token)
         file = db.query(VaultFile).filter(VaultFile.id == share.vault_item_id).first()
         if not file:
             raise HTTPException(status_code=404, detail="File not found")
 
-        viewer_type, viewer_label = resolve_viewer_identity(db, token, authorization, x_guest_id)
+        viewer_type, viewer_label = resolve_viewer_identity(db, token, authorization, request)
         normalized_action = action if action in {"preview", "download"} else "preview"
         create_share_access_log(db, share.id, normalized_action, viewer_type, viewer_label, request)
         share.views = (share.views or 0) + 1
@@ -690,9 +745,17 @@ def activity_logs(current_user: User = Depends(get_current_user)):
 # AUTH - SIGNUP
 # -------------------------
 @app.post("/auth/signup")
-def signup(username: str = Form(...), email: str = Form(...), password: str = Form(...)):
+def signup(
+    request: Request,
+    username: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+):
     db = SessionLocal()
     try:
+        client = client_identity(request)
+        enforce_rate_limit("signup_ip", client, 10, 60)
+        enforce_rate_limit("signup_email", email.lower(), 5, 300)
         # check if user exists
         existing = db.query(User).filter((User.email == email) | (User.username == username)).first()
         if existing:
@@ -719,9 +782,12 @@ def signup(username: str = Form(...), email: str = Form(...), password: str = Fo
 # AUTH - LOGIN
 # -------------------------
 @app.post("/auth/login")
-def login(email: str = Form(...), password: str = Form(...)):
+def login(request: Request, email: str = Form(...), password: str = Form(...)):
     db = SessionLocal()
     try:
+        client = client_identity(request)
+        enforce_rate_limit("login_ip", client, 20, 60)
+        enforce_rate_limit("login_email", email.lower(), 10, 60)
         user = db.query(User).filter(User.email == email).first()
 
         if not user or not check_password_hash(user.password_hash, password):
@@ -743,6 +809,7 @@ def login(email: str = Form(...), password: str = Form(...)):
             "email": user.email,
             "salt": user.salt,
             "last_login": user.last_login,
+            "expires_at": session.expires_at,
             "access_token": raw_token
         }
     finally:

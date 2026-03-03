@@ -1,8 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import { useEffect, useState } from "react";
-import { restoreMasterKey } from "./utils/keyStore";
-import { getAccessToken } from "./utils/session";
+import { clearMasterKey, restoreMasterKey } from "./utils/keyStore";
+import { clearSession, getAccessToken, isRapidRefreshDetected } from "./utils/session";
 
 import Home from "./pages/Home";
 import Vaults from "./pages/Vaults";
@@ -18,7 +18,15 @@ function App() {
 
   useEffect(() => {
     async function init() {
+      if (isRapidRefreshDetected()) {
+        clearMasterKey();
+        clearSession();
+        setIsAuthed(false);
+        setReady(true);
+        return;
+      }
       await restoreMasterKey();
+      setIsAuthed(Boolean(getAccessToken()));
       setReady(true);
     }
     init();

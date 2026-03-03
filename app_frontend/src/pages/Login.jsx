@@ -74,7 +74,7 @@ function Login() {
 
             if (res.ok) {
                  // ✅ 1. Store full user info for UI + refresh persistence
-                localStorage.setItem("user", JSON.stringify({
+                sessionStorage.setItem("user", JSON.stringify({
                   user_id: data.user_id,
                   username: data.username,
                   email: data.email,
@@ -85,6 +85,7 @@ function Login() {
                   user_id: data.user_id,
                   salt: data.salt,
                   token: data.access_token,
+                  expires_at: data.expires_at,
                 });
 
               const masterKey = await deriveMasterKey(password, data.salt);

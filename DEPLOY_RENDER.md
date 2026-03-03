@@ -57,6 +57,7 @@ If env vars are not set locally:
 - Ensure backend env includes:
   - `APP_ENV=production`
   - `CORS_ORIGINS=https://<your-frontend-domain>`
+  - `MAX_UPLOAD_BYTES=26214400` (25 MB)
 
 ## 7. One-time history cleanup (recommended)
 

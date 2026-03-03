@@ -14,7 +14,9 @@ import { apiFetch } from "../utils/api";
 function UserDropdown() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = JSON.parse(
+    sessionStorage.getItem("user") || localStorage.getItem("user") || "{}"
+  );
 
   return (
     <div className="relative">

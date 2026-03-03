@@ -39,9 +39,14 @@ class ApiRouteUnitTests(unittest.TestCase):
         shutil.rmtree(cls.tmp_dir, ignore_errors=True)
 
     def signup_and_login(self, username, email, password):
-        signup = main.signup(username=username, email=email, password=password)
+        signup = main.signup(
+            request=self.fake_request(),
+            username=username,
+            email=email,
+            password=password,
+        )
         self.assertEqual(signup["message"], "User created successfully")
-        login = main.login(email=email, password=password)
+        login = main.login(request=self.fake_request(), email=email, password=password)
         self.assertIn("access_token", login)
         return login
 
@@ -99,6 +104,7 @@ class ApiRouteUnitTests(unittest.TestCase):
         upload_file = UploadFile(filename="secret.bin", file=io.BytesIO(b"ciphertext"))
         created = asyncio.run(
             main.upload_encrypted_file(
+                request=self.fake_request(),
                 encrypted_file=upload_file,
                 filename="secret.bin",
                 mime_type="application/octet-stream",
@@ -128,6 +134,7 @@ class ApiRouteUnitTests(unittest.TestCase):
         upload_file = UploadFile(filename="share.bin", file=io.BytesIO(b"sharecipher"))
         created = asyncio.run(
             main.upload_encrypted_file(
+                request=self.fake_request(),
                 encrypted_file=upload_file,
                 filename="share.bin",
                 mime_type="application/octet-stream",
@@ -141,6 +148,7 @@ class ApiRouteUnitTests(unittest.TestCase):
         file_id = created["file_id"]
 
         share = main.create_share_link(
+            request=self.fake_request(),
             file_id=file_id,
             encrypted_key="share-wrapped-key",
             key_iv="share-key-iv",
@@ -180,6 +188,7 @@ class ApiRouteUnitTests(unittest.TestCase):
         self.assertEqual(view_limited.exception.status_code, 410)
 
         share2 = main.create_share_link(
+            request=self.fake_request(),
             file_id=file_id,
             encrypted_key="share-wrapped-key-2",
             key_iv="share-key-iv-2",

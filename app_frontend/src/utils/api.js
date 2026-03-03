@@ -1,4 +1,5 @@
-import { getAccessToken } from "./session";
+import { clearSession, getAccessToken } from "./session";
+import { clearMasterKey } from "./keyStore";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL ||
@@ -20,6 +21,11 @@ export async function apiFetch(path, options = {}) {
     ...options,
     headers,
   });
+
+  if (response.status === 401) {
+    clearMasterKey();
+    clearSession();
+  }
 
   return response;
 }

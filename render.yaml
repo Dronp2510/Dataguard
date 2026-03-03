@@ -17,6 +17,8 @@ services:
         value: https://dataguard-frontend.onrender.com
       - key: APP_ENV
         value: production
+      - key: MAX_UPLOAD_BYTES
+        value: "26214400"
     disk:
       name: dataguard-data
       mountPath: /var/data
