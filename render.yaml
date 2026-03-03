@@ -10,20 +10,15 @@ services:
       - key: PYTHON_VERSION
         value: 3.12.6
       - key: DATABASE_URL
-        value: sqlite:////var/data/dataguard.db
+        value: sqlite:////tmp/dataguard.db
       - key: STORAGE_PATH
-        value: /var/data/secure_storage
+        value: /tmp/secure_storage
       - key: CORS_ORIGINS
         value: https://dataguard-frontend.onrender.com
       - key: APP_ENV
         value: production
       - key: MAX_UPLOAD_BYTES
         value: "26214400"
-    disk:
-      name: dataguard-data
-      mountPath: /var/data
-      sizeGB: 1
-
   - type: web
     name: dataguard-frontend
     runtime: static

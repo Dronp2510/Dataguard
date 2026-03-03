@@ -32,14 +32,15 @@ After deploy, replace these env vars with your real service URLs:
 
 Then redeploy frontend once.
 
-## 4. Persistent storage notes
+## 4. Storage notes
 
 Backend uses:
 
-- `DATABASE_URL=sqlite:////var/data/dataguard.db`
-- `STORAGE_PATH=/var/data/secure_storage`
+- `DATABASE_URL=sqlite:////tmp/dataguard.db`
+- `STORAGE_PATH=/tmp/secure_storage`
 
-These paths are on the attached persistent disk (`/var/data`), so file shares and DB survive restarts.
+On Render free tier these paths are ephemeral; data can be lost on restart/redeploy.
+Use a paid instance with a persistent disk (or external database/object storage) for durable data.
 
 ## 5. Local development unaffected
 
