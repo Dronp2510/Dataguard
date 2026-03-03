@@ -6,9 +6,10 @@ import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
 
 function getOrCreateGuestId(token) {
   const key = `dg_guest_${token}`;
-  const existing = sessionStorage.getItem(key);
+  const existing = localStorage.getItem(key) || sessionStorage.getItem(key);
   if (existing) return existing;
   const created = `guest-${token.slice(0, 8)}-${Math.random().toString(36).slice(2, 8)}`;
+  localStorage.setItem(key, created);
   sessionStorage.setItem(key, created);
   return created;
 }

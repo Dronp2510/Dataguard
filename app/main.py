@@ -165,6 +165,7 @@ def resolve_viewer_identity(
     db,
     token: str,
     authorization: str | None,
+    x_guest_id: str | None,
     request: Request | None,
 ) -> tuple[str, str]:
     if authorization:
@@ -182,6 +183,10 @@ def resolve_viewer_identity(
                     pass
 
     token_prefix = token[:8]
+    if x_guest_id and x_guest_id.strip():
+        normalized_guest = x_guest_id.strip()[:80]
+        return ("guest", f"Guest: {normalized_guest} | Link: {token_prefix}")
+
     ip_part = request.client.host if request and request.client and request.client.host else "unknown"
     ua_part = (request.headers.get("user-agent") or "")[:160] if request else ""
     fingerprint_src = f"{token}|{ip_part}|{ua_part}"
@@ -601,7 +606,7 @@ def share_metadata(
         file = db.query(VaultFile).filter(VaultFile.id == share.vault_item_id).first()
         if not file:
             raise HTTPException(status_code=404, detail="File not found")
-        viewer_type, viewer_label = resolve_viewer_identity(db, token, authorization, request)
+        viewer_type, viewer_label = resolve_viewer_identity(db, token, authorization, x_guest_id, request)
         create_share_access_log(db, share.id, "metadata", viewer_type, viewer_label, request)
         db.commit()
 
@@ -640,7 +645,7 @@ def share_blob(
         if not file:
             raise HTTPException(status_code=404, detail="File not found")
 
-        viewer_type, viewer_label = resolve_viewer_identity(db, token, authorization, request)
+        viewer_type, viewer_label = resolve_viewer_identity(db, token, authorization, x_guest_id, request)
         normalized_action = action if action in {"preview", "download"} else "preview"
         create_share_access_log(db, share.id, normalized_action, viewer_type, viewer_label, request)
         share.views = (share.views or 0) + 1
@@ -723,12 +728,33 @@ def activity_logs(current_user: User = Depends(get_current_user)):
             else:
                 status = "active"
 
+            viewer_latest: dict[str, dict] = {}
+            for log in logs:
+                entry = viewer_latest.get(log.viewer_label)
+                if entry is None:
+                    viewer_latest[log.viewer_label] = {
+                        "viewer_type": log.viewer_type,
+                        "viewer_label": log.viewer_label,
+                        "latest_time_accessed": log.created_at,
+                        "access_count": 1,
+                    }
+                else:
+                    entry["access_count"] += 1
+
+            viewer_entries = sorted(
+                viewer_latest.values(),
+                key=lambda row: row["latest_time_accessed"] or datetime.min.replace(tzinfo=timezone.utc),
+                reverse=True,
+            )
+
             result.append(
                 {
                     "share_id": share.id,
                     "file_id": share.vault_item_id,
                     "name": file.filename if file else "Unknown File",
                     "accessed_by": latest_log.viewer_label if latest_log else "No access yet",
+                    "unique_viewer_count": len(viewer_entries),
+                    "viewer_entries": viewer_entries,
                     "number_of_time_accessed": share.views or 0,
                     "latest_time_accessed": latest_log.created_at if latest_log else None,
                     "all_access_times": [log.created_at for log in logs],

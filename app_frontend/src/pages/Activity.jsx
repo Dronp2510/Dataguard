@@ -23,6 +23,35 @@ function statusLabel(status) {
   return status;
 }
 
+function parseViewerLabel(label) {
+  const raw = String(label || "").trim();
+  if (!raw || raw === "No access yet") {
+    return { id: "No access yet", detail: "", full: raw || "No access yet" };
+  }
+
+  if (raw.startsWith("User:")) {
+    const body = raw.slice(5).trim();
+    const parts = body.split("|").map((part) => part.trim()).filter(Boolean);
+    return {
+      id: parts[0] || "User",
+      detail: parts.slice(1).join(" | "),
+      full: raw,
+    };
+  }
+
+  if (raw.startsWith("Guest:")) {
+    const body = raw.slice(6).trim();
+    const parts = body.split("|").map((part) => part.trim()).filter(Boolean);
+    return {
+      id: parts[0] || "Guest",
+      detail: parts.slice(1).join(" | "),
+      full: raw,
+    };
+  }
+
+  return { id: raw, detail: "", full: raw };
+}
+
 function Activity() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +109,23 @@ function Activity() {
                   {row.name}
                 </div>
                 <div className="col-span-3 truncate" title={row.accessed_by}>
-                  {row.accessed_by}
+                  {(() => {
+                    const parsed = parseViewerLabel(row.accessed_by);
+                    const hoverText = parsed.detail ? `${parsed.id} | ${parsed.detail}` : parsed.full;
+                    return (
+                  <button
+                    className="text-left text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
+                    disabled={!row.viewer_entries?.length}
+                    onClick={() =>
+                      setExpandedShareId(expandedShareId === row.share_id ? null : row.share_id)
+                    }
+                    title={hoverText}
+                  >
+                    {parsed.id}
+                    {row.unique_viewer_count > 1 ? ` (${row.unique_viewer_count})` : ""}
+                  </button>
+                    );
+                  })()}
                 </div>
                 <div className="col-span-2">{row.number_of_time_accessed}</div>
                 <div className="col-span-2">
@@ -105,19 +150,42 @@ function Activity() {
 
               {expandedShareId === row.share_id && (
                 <div className="px-4 pb-4">
-                  <div className="rounded-md border bg-slate-50 p-3">
-                    <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">
-                      All access times
-                    </p>
-                    {row.all_access_times?.length ? (
-                      <ul className="space-y-1 text-sm text-gray-700">
-                        {row.all_access_times.map((time, idx) => (
-                          <li key={`${row.share_id}-${idx}`}>{formatDateTime(time)}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-gray-500">No access yet.</p>
-                    )}
+                  <div className="rounded-md border bg-slate-50 p-3 space-y-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+                        Unique viewers
+                      </p>
+                      {row.viewer_entries?.length ? (
+                        <ul className="space-y-1 text-sm text-gray-700">
+                          {row.viewer_entries.map((viewer, idx) => {
+                            const parsed = parseViewerLabel(viewer.viewer_label);
+                            const hoverText = parsed.detail ? `${parsed.id} | ${parsed.detail}` : parsed.full;
+                            return (
+                              <li key={`${row.share_id}-viewer-${idx}`} title={hoverText}>
+                                {parsed.id} - {formatDateTime(viewer.latest_time_accessed)} ({viewer.access_count})
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-gray-500">No access yet.</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+                        All access times
+                      </p>
+                      {row.all_access_times?.length ? (
+                        <ul className="space-y-1 text-sm text-gray-700">
+                          {row.all_access_times.map((time, idx) => (
+                            <li key={`${row.share_id}-${idx}`}>{formatDateTime(time)}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-gray-500">No access yet.</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
