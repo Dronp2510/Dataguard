@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiFetch } from "../utils/api";
 
 function Signup() {
   const navigate = useNavigate();
@@ -78,7 +79,7 @@ function Signup() {
               formData.append("username", username);
               formData.append("password", password);
 
-              const res = await fetch("http://localhost:8000/auth/signup", {
+              const res = await apiFetch("/auth/signup", {
                 method: "POST",
                 body: formData,
               });

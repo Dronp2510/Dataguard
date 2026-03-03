@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { setSession } from "../utils/session";
 import { deriveMasterKey } from "../utils/crypto";
 import { setMasterKey } from "../utils/keyStore";
+import { apiFetch } from "../utils/api";
 
 
 
@@ -63,7 +64,7 @@ function Login() {
               formData.append("email", email);
               formData.append("password", password);
 
-              const res = await fetch("http://localhost:8000/auth/login", {
+              const res = await apiFetch("/auth/login", {
                 method: "POST",
                 body: formData,
               });

@@ -47,4 +47,17 @@ If env vars are not set locally:
 
 - DB defaults to `sqlite:///./dataguard.db`
 - Storage defaults to `./secure_storage`
-- CORS defaults to `*`
+- CORS defaults to localhost frontend origins only (`http://localhost:5173`, `http://127.0.0.1:5173`)
+
+## 6. Security checks before connect
+
+- Keep GitHub app scope to `Only select repositories`.
+- Do not grant additional repository permissions unless needed.
+- Keep `.env` files out of git (root and frontend `.env*` are ignored in this repo).
+- Ensure backend env includes:
+  - `APP_ENV=production`
+  - `CORS_ORIGINS=https://<your-frontend-domain>`
+
+## 7. One-time history cleanup (recommended)
+
+Past commits previously included files under `secure_storage/`. If any were real sensitive files, clean git history before making the repo public or widely shared.

@@ -38,10 +38,14 @@ ensure_sqlite_column("share_access_logs", "user_agent", "VARCHAR")
 
 app = FastAPI(title="DataGuard MVP")
 
-cors_origins_env = os.getenv("CORS_ORIGINS", "*")
-cors_origins = ["*"] if cors_origins_env.strip() == "*" else [
-    origin.strip() for origin in cors_origins_env.split(",") if origin.strip()
-]
+cors_origins_env = os.getenv("CORS_ORIGINS")
+if cors_origins_env:
+    cors_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+else:
+    cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+if "*" in cors_origins and os.getenv("APP_ENV", "development").lower() != "development":
+    raise RuntimeError("CORS_ORIGINS cannot include '*' outside development")
 
 app.add_middleware(
     CORSMiddleware,
