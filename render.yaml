@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: dataguard-backend
+    runtime: python
+    plan: free
+    rootDir: .
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.6
+      - key: DATABASE_URL
+        value: sqlite:////var/data/dataguard.db
+      - key: STORAGE_PATH
+        value: /var/data/secure_storage
+      - key: CORS_ORIGINS
+        value: https://dataguard-frontend.onrender.com
+    disk:
+      name: dataguard-data
+      mountPath: /var/data
+      sizeGB: 1
+
+staticSites:
+  - name: dataguard-frontend
+    rootDir: app_frontend
+    buildCommand: npm ci && npm run build
+    publishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://dataguard-backend.onrender.com
+      - key: VITE_PUBLIC_SHARE_ORIGIN
+        value: https://dataguard-frontend.onrender.com

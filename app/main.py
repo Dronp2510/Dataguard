@@ -38,9 +38,14 @@ ensure_sqlite_column("share_access_logs", "user_agent", "VARCHAR")
 
 app = FastAPI(title="DataGuard MVP")
 
+cors_origins_env = os.getenv("CORS_ORIGINS", "*")
+cors_origins = ["*"] if cors_origins_env.strip() == "*" else [
+    origin.strip() for origin in cors_origins_env.split(",") if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

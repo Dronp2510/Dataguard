@@ -1,11 +1,13 @@
 import secrets
 import hashlib
+import os
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-STORAGE_PATH = BASE_DIR / "secure_storage"
+storage_root = os.getenv("STORAGE_PATH")
+STORAGE_PATH = Path(storage_root) if storage_root else (BASE_DIR / "secure_storage")
 STORAGE_PATH.mkdir(exist_ok=True)
 
 TOKEN_TTL_HOURS = 12
