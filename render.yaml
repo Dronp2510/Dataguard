@@ -24,11 +24,12 @@ services:
       mountPath: /var/data
       sizeGB: 1
 
-staticSites:
-  - name: dataguard-frontend
+  - type: web
+    name: dataguard-frontend
+    runtime: static
     rootDir: app_frontend
     buildCommand: npm ci && npm run build
-    publishPath: dist
+    staticPublishPath: dist
     envVars:
       - key: VITE_API_BASE_URL
         value: https://dataguard-backend.onrender.com
