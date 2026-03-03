@@ -5,7 +5,7 @@ function formatDateTime(value) {
   if (!value) return "-";
   const dt = new Date(value);
   if (Number.isNaN(dt.getTime())) return "-";
-  return dt.toLocaleString();
+  return dt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
 }
 
 function statusStyle(status) {
@@ -94,7 +94,7 @@ function Activity() {
             <div className="col-span-3">Name</div>
             <div className="col-span-3">Accessed By</div>
             <div className="col-span-2">No. of Access</div>
-            <div className="col-span-2">Latest Access Time</div>
+            <div className="col-span-2">Latest Access Time (IST)</div>
             <div className="col-span-2">Status</div>
           </div>
 

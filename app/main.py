@@ -696,6 +696,13 @@ def share_logs(share_id: str, current_user: User = Depends(get_current_user)):
 def activity_logs(current_user: User = Depends(get_current_user)):
     db = SessionLocal()
     try:
+        def as_utc(dt: datetime | None) -> datetime | None:
+            if dt is None:
+                return None
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt
+
         now = datetime.now(timezone.utc)
         shares = (
             db.query(Share)
@@ -713,8 +720,9 @@ def activity_logs(current_user: User = Depends(get_current_user)):
                 .order_by(ShareAccessLog.created_at.desc())
                 .all()
             )
+            access_logs = [log for log in logs if log.action in {"preview", "download"}]
 
-            latest_log = logs[0] if logs else None
+            latest_log = access_logs[0] if access_logs else None
             expires = share.expiry_time
             if expires.tzinfo is None:
                 expires = expires.replace(tzinfo=timezone.utc)
@@ -729,13 +737,13 @@ def activity_logs(current_user: User = Depends(get_current_user)):
                 status = "active"
 
             viewer_latest: dict[str, dict] = {}
-            for log in logs:
+            for log in access_logs:
                 entry = viewer_latest.get(log.viewer_label)
                 if entry is None:
                     viewer_latest[log.viewer_label] = {
                         "viewer_type": log.viewer_type,
                         "viewer_label": log.viewer_label,
-                        "latest_time_accessed": log.created_at,
+                        "latest_time_accessed": as_utc(log.created_at),
                         "access_count": 1,
                     }
                 else:
@@ -756,8 +764,8 @@ def activity_logs(current_user: User = Depends(get_current_user)):
                     "unique_viewer_count": len(viewer_entries),
                     "viewer_entries": viewer_entries,
                     "number_of_time_accessed": share.views or 0,
-                    "latest_time_accessed": latest_log.created_at if latest_log else None,
-                    "all_access_times": [log.created_at for log in logs],
+                    "latest_time_accessed": as_utc(latest_log.created_at) if latest_log else None,
+                    "all_access_times": [as_utc(log.created_at) for log in access_logs],
                     "status": status,
                     "expiry_time": share.expiry_time,
                 }
