@@ -106,6 +106,7 @@ function ShareAccess() {
 
   useEffect(() => {
     let active = true;
+    let createdUrl = null;
     (async () => {
       setLoading(true);
       setError("");
@@ -131,16 +132,30 @@ function ShareAccess() {
         }
         const encryptedBuffer = await blobRes.arrayBuffer();
         const decryptedBuffer = await decryptFile(encryptedBuffer, iv, fileKey);
-        const blob = new Blob([decryptedBuffer], { type: mime_type });
-        const url = URL.createObjectURL(blob);
+        const originalBlob = new Blob([decryptedBuffer], { type: mime_type });
+        const wmText = meta.watermark_text || `Share: ${guestId} | Link: ${token.slice(0, 8)}`;
+
+        let previewBlob = originalBlob;
+        if (mime_type === "application/pdf") {
+          const stamped = await buildWatermarkedPdfBlob(originalBlob, wmText);
+          stampedPdfRef.current = stamped;
+          previewBlob = stamped;
+        } else {
+          stampedPdfRef.current = null;
+        }
+
+        const url = URL.createObjectURL(previewBlob);
+        createdUrl = url;
 
         if (!active) return;
-        setPreviewUrl(url);
+        setPreviewUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
         setFilename(filename);
         setMimeType(mime_type);
-        setDecryptedBlob(blob);
-        setWatermarkText(meta.watermark_text || `Share: ${guestId} | Link: ${token.slice(0, 8)}`);
-        stampedPdfRef.current = null;
+        setDecryptedBlob(originalBlob);
+        setWatermarkText(wmText);
       } catch (err) {
         if (!active) return;
         setError(err.message || "Failed to open shared file");
@@ -150,6 +165,7 @@ function ShareAccess() {
     })();
     return () => {
       active = false;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
   }, [guestId, token]);
 
@@ -216,7 +232,9 @@ function ShareAccess() {
               ) : (
                 <iframe title="shared-preview" src={previewUrl} className="w-full h-full" />
               )}
-              <div className="absolute inset-0 pointer-events-none" style={watermarkStyle} />
+              {mimeType !== "application/pdf" && (
+                <div className="absolute inset-0 pointer-events-none" style={watermarkStyle} />
+              )}
             </div>
           </div>
         )}
