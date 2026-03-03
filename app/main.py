@@ -622,6 +622,61 @@ def share_logs(share_id: str, current_user: User = Depends(get_current_user)):
     finally:
         db.close()
 
+
+@app.get("/activity/logs")
+def activity_logs(current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        shares = (
+            db.query(Share)
+            .filter(Share.owner_id == current_user.id)
+            .order_by(Share.created_at.desc())
+            .all()
+        )
+
+        result = []
+        for share in shares:
+            file = db.query(VaultFile).filter(VaultFile.id == share.vault_item_id).first()
+            logs = (
+                db.query(ShareAccessLog)
+                .filter(ShareAccessLog.share_id == share.id)
+                .order_by(ShareAccessLog.created_at.desc())
+                .all()
+            )
+
+            latest_log = logs[0] if logs else None
+            expires = share.expiry_time
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=timezone.utc)
+
+            if not share.is_active:
+                status = "revoked"
+            elif share.max_views is not None and (share.views or 0) >= share.max_views:
+                status = "view_limit_reached"
+            elif expires <= now:
+                status = "expired"
+            else:
+                status = "active"
+
+            result.append(
+                {
+                    "share_id": share.id,
+                    "file_id": share.vault_item_id,
+                    "name": file.filename if file else "Unknown File",
+                    "accessed_by": latest_log.viewer_label if latest_log else "No access yet",
+                    "number_of_time_accessed": share.views or 0,
+                    "latest_time_accessed": latest_log.created_at if latest_log else None,
+                    "all_access_times": [log.created_at for log in logs],
+                    "status": status,
+                    "expiry_time": share.expiry_time,
+                }
+            )
+
+        return result
+    finally:
+        db.close()
+
 # -------------------------
 # AUTH - SIGNUP
 # -------------------------
