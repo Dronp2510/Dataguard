@@ -98,11 +98,12 @@ function ShareAccess() {
   const guestId = useMemo(() => getOrCreateGuestId(token), [token]);
   const watermarkStyle = useMemo(() => {
     const text = encodeURIComponent(watermarkText || "Protected Share");
+    const alpha = mimeType === "application/pdf" ? "0.08" : "0.15";
     return {
-      backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='220'><text x='10' y='120' fill='rgba(0,0,0,0.15)' font-size='18' transform='rotate(-24 140,90)'>${text}</text></svg>")`,
+      backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='220'><text x='10' y='120' fill='rgba(0,0,0,${alpha})' font-size='18' transform='rotate(-24 140,90)'>${text}</text></svg>")`,
       backgroundRepeat: "repeat",
     };
-  }, [watermarkText]);
+  }, [mimeType, watermarkText]);
 
   useEffect(() => {
     let active = true;
@@ -232,9 +233,7 @@ function ShareAccess() {
               ) : (
                 <iframe title="shared-preview" src={previewUrl} className="w-full h-full" />
               )}
-              {mimeType !== "application/pdf" && (
-                <div className="absolute inset-0 pointer-events-none" style={watermarkStyle} />
-              )}
+              <div className="absolute inset-0 pointer-events-none" style={watermarkStyle} />
             </div>
           </div>
         )}
