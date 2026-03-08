@@ -74,11 +74,13 @@ function Login() {
 
             if (res.ok) {
                  // ✅ 1. Store full user info for UI + refresh persistence
-                sessionStorage.setItem("user", JSON.stringify({
+                const userPayload = JSON.stringify({
                   user_id: data.user_id,
                   username: data.username,
                   email: data.email,
-                }));
+                });
+                sessionStorage.setItem("user", userPayload);
+                localStorage.setItem("user", userPayload);
 
                 // ✅ 2. Keep your encryption session logic (DO NOT REMOVE)
                 setSession({
