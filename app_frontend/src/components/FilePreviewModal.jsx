@@ -105,13 +105,13 @@ function FilePreviewModal({ file, onClose }) {
           </button>
         </div>
 
-        <div className="flex-1">
+        <div className="min-h-0 flex-1">
           {previewUrl && isImage && (
-            <div className="flex h-full w-full items-center justify-center bg-black p-2">
+            <div className="flex h-full w-full items-center justify-center overflow-hidden bg-black p-2">
               <img
                 src={previewUrl}
                 alt={file.name}
-                className="block max-h-full max-w-full object-contain"
+                className="block h-full w-full object-contain"
               />
             </div>
           )}
