@@ -51,6 +51,17 @@ function openBlobInNewTab(blob, fallbackFilename) {
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
+function buildPdfInlineViewerHtml(pdfUrl, filename) {
+  return `<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>${filename}</title><style>html,body{height:100%;margin:0;background:#0b0b0b} .frame{height:100%;width:100%} .fallback{position:fixed;left:0;right:0;bottom:0;background:#111;color:#fff;padding:10px;font-family:Arial,sans-serif;font-size:13px;text-align:center} a{color:#7dd3fc}</style></head><body><object class='frame' data='${pdfUrl}' type='application/pdf'><embed class='frame' src='${pdfUrl}' type='application/pdf' /></object><div class='fallback'>If PDF is not visible, <a href='${pdfUrl}' target='_blank' rel='noopener noreferrer'>open it directly</a>.</div></body></html>`;
+}
+
+function normalizeWatermarkText(value) {
+  const cleaned = String(value || "").replace(/\s+/g, " ").trim();
+  if (!cleaned) return "Protected Share";
+  if (cleaned.length <= 120) return cleaned;
+  return `${cleaned.slice(0, 117)}...`;
+}
+
 function buildWatermarkedHtml(dataUrl, filename, watermarkText) {
   return `<!doctype html><html><head><meta charset='utf-8'><title>${filename}</title><style>body{margin:0;font-family:Arial} .wrap{position:relative;height:100vh} iframe{width:100%;height:100%;border:0} .wm{position:absolute;inset:0;pointer-events:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='220'><text x='10' y='120' fill='rgba(0,0,0,0.15)' font-size='18' transform='rotate(-24 140,90)'>${encodeURIComponent(
     watermarkText
@@ -75,19 +86,26 @@ async function buildWatermarkedImageBlob(imageBlob, watermarkText, mimeType) {
 
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-    const fontSize = Math.max(16, Math.round(Math.min(canvas.width, canvas.height) / 22));
-    const xGap = Math.max(220, Math.round(canvas.width / 3));
-    const yGap = Math.max(160, Math.round(canvas.height / 3.5));
+    const text = normalizeWatermarkText(watermarkText);
+    const fontSize = Math.max(28, Math.min(64, Math.round(Math.min(canvas.width, canvas.height) / 14)));
+    const yGap = Math.max(170, Math.round(fontSize * 2.4));
+
+    ctx.font = `700 ${fontSize}px Arial`;
+    const textWidth = Math.ceil(ctx.measureText(text).width);
+    const xGap = Math.max(Math.round(textWidth + 110), Math.round(canvas.width / 2.5));
 
     ctx.save();
-    ctx.globalAlpha = 0.22;
-    ctx.fillStyle = "#222";
-    ctx.font = `${fontSize}px Arial`;
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = "#111";
+    ctx.strokeStyle = "rgba(255,255,255,0.7)";
+    ctx.lineWidth = Math.max(2, Math.round(fontSize / 12));
+    ctx.textBaseline = "middle";
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.rotate((-25 * Math.PI) / 180);
     for (let y = -canvas.height * 1.5; y <= canvas.height * 1.5; y += yGap) {
       for (let x = -canvas.width * 1.5; x <= canvas.width * 1.5; x += xGap) {
-        ctx.fillText(watermarkText, x, y);
+        ctx.strokeText(text, x, y);
+        ctx.fillText(text, x, y);
       }
     }
     ctx.restore();
@@ -141,16 +159,20 @@ function ShareAccess() {
   const [watermarkedBlob, setWatermarkedBlob] = useState(null);
   const [watermarkText, setWatermarkText] = useState("");
   const stampedPdfRef = useRef(null);
+  const isMobile = useMemo(
+    () => typeof window !== "undefined" && /android|iphone|ipad|ipod/i.test(window.navigator.userAgent || ""),
+    []
+  );
 
   const guestId = useMemo(() => getOrCreateGuestId(token), [token]);
   const watermarkStyle = useMemo(() => {
-    const text = encodeURIComponent(watermarkText || "Protected Share");
-    const alpha = "0.15";
+    const text = encodeURIComponent(normalizeWatermarkText(watermarkText || "Protected Share"));
+    const alpha = "0.24";
     return {
-      backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='220'><text x='10' y='120' fill='rgba(0,0,0,${alpha})' font-size='18' transform='rotate(-24 140,90)'>${text}</text></svg>")`,
+      backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='420' height='260'><text x='16' y='140' fill='rgba(0,0,0,${alpha})' stroke='rgba(255,255,255,0.55)' stroke-width='0.7' font-size='24' font-family='Arial,sans-serif' transform='rotate(-24 180,120)'>${text}</text></svg>")`,
       backgroundRepeat: "repeat",
     };
-  }, [mimeType, watermarkText]);
+  }, [watermarkText]);
 
   useEffect(() => {
     let active = true;
@@ -181,7 +203,7 @@ function ShareAccess() {
         const encryptedBuffer = await blobRes.arrayBuffer();
         const decryptedBuffer = await decryptFile(encryptedBuffer, iv, fileKey);
         const originalBlob = new Blob([decryptedBuffer], { type: mime_type });
-        const wmText = meta.watermark_text || `Share: ${guestId} | Link: ${token.slice(0, 8)}`;
+        const wmText = normalizeWatermarkText(meta.watermark_text || `Share: ${guestId} | Link: ${token.slice(0, 8)}`);
 
         let previewBlob = originalBlob;
         if (mime_type === "application/pdf") {
@@ -260,6 +282,21 @@ function ShareAccess() {
                     Open PDF
                   </button>
                 )}
+                {mimeType === "application/pdf" && (
+                  <button
+                    className="text-sm text-blue-700 hover:underline"
+                    onClick={async () => {
+                      const stamped = await getStampedPdf();
+                      if (!stamped) return;
+                      const stampedUrl = URL.createObjectURL(stamped);
+                      const html = buildPdfInlineViewerHtml(stampedUrl, filename);
+                      openBlobInNewTab(new Blob([html], { type: "text/html" }), `${filename}.viewer.html`);
+                      setTimeout(() => URL.revokeObjectURL(stampedUrl), 45000);
+                    }}
+                  >
+                    Open Inline Viewer
+                  </button>
+                )}
                 <button
                   className="text-sm text-blue-700 hover:underline"
                   onClick={async () => {
@@ -285,14 +322,25 @@ function ShareAccess() {
                 </button>
               </div>
             </div>
-            <div className="relative h-[60vh] w-full md:h-[75vh]">
+            <div className="relative h-[68vh] w-full bg-black md:h-[75vh]">
               {mimeType.startsWith("image/") ? (
-                <img src={previewUrl} alt={filename} className="w-full h-full object-contain bg-white" />
+                <div className="h-full w-full overflow-auto">
+                  <img src={previewUrl} alt={filename} className="mx-auto block h-auto max-w-full bg-black" />
+                </div>
+              ) : mimeType === "application/pdf" ? (
+                <object data={previewUrl} type="application/pdf" className="h-full w-full bg-white">
+                  <iframe title="shared-preview" src={previewUrl} className="h-full w-full" />
+                </object>
               ) : (
                 <iframe title="shared-preview" src={previewUrl} className="w-full h-full" />
               )}
               {shouldOverlayWatermark && <div className="absolute inset-0 pointer-events-none" style={watermarkStyle} />}
             </div>
+            {mimeType === "application/pdf" && isMobile && (
+              <p className="px-3 py-2 text-xs text-gray-600">
+                If your mobile browser does not render the PDF here, use "Open Inline Viewer".
+              </p>
+            )}
           </div>
         )}
       </div>
