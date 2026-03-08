@@ -3,6 +3,7 @@ import { Activity, FileText, Folder, Link2, ShieldCheck, Share2 } from "lucide-r
 import { useNavigate } from "react-router-dom";
 import { useOutletContext } from "react-router-dom";
 import FilePreviewModal from "../components/FilePreviewModal";
+import ShareModal from "../components/ShareModal";
 import { apiFetch } from "../utils/api";
 
 function formatDateTime(value) {
@@ -64,6 +65,7 @@ function Home() {
   const [error, setError] = useState("");
   const [expandedShareId, setExpandedShareId] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
   const navigate = useNavigate();
 
   const user = useMemo(() => {
@@ -204,7 +206,18 @@ function Home() {
                     )}
                     <span className="text-xs font-medium uppercase text-gray-500">{item.type}</span>
                   </div>
-                  <Share2 size={16} className="text-gray-400 transition group-hover:text-blue-600" />
+                  {item.type === "file" ? (
+                    <button
+                      type="button"
+                      title="Share file"
+                      onClick={() => setSelectedFile(item)}
+                      className="rounded p-1 text-gray-400 transition hover:bg-slate-100 hover:text-blue-600"
+                    >
+                      <Share2 size={16} />
+                    </button>
+                  ) : (
+                    <Share2 size={16} className="text-gray-300" />
+                  )}
                 </div>
 
                 <h3 className="truncate font-semibold text-slate-900" title={item.name}>
@@ -261,6 +274,8 @@ function Home() {
                   <th className="px-6 py-3">Accessed By</th>
                   <th className="px-6 py-3">Unique Viewers</th>
                   <th className="px-6 py-3">No. of Access</th>
+                  <th className="px-6 py-3">Downloads</th>
+                  <th className="px-6 py-3">Downloaded?</th>
                   <th className="px-6 py-3">Latest Access Time (IST)</th>
                   <th className="px-6 py-3">Status</th>
                 </tr>
@@ -291,6 +306,16 @@ function Home() {
                         </td>
                         <td className="px-6 py-3">{row.unique_viewer_count || 0}</td>
                         <td className="px-6 py-3">{row.number_of_time_accessed}</td>
+                        <td className="px-6 py-3">{row.download_count || 0}</td>
+                        <td className="px-6 py-3">
+                          <span
+                            className={`inline-flex rounded-full px-2 py-1 text-xs ${
+                              row.is_downloaded ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {row.is_downloaded ? "Yes" : "No"}
+                          </span>
+                        </td>
                         <td className="px-6 py-3">
                           <button
                             className="text-left text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
@@ -310,7 +335,7 @@ function Home() {
                       </tr>
                       {isExpanded && (
                         <tr className="border-b border-slate-100 bg-slate-50/70">
-                          <td colSpan={6} className="px-6 py-4">
+                          <td colSpan={8} className="px-6 py-4">
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="rounded-md border border-slate-200 bg-white p-3">
                                 <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">Unique viewers</p>
@@ -363,6 +388,7 @@ function Home() {
         )}
       </section>
       {previewFile && <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />}
+      <ShareModal file={selectedFile} onClose={() => setSelectedFile(null)} />
     </div>
   );
 }

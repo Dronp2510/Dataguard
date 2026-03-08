@@ -1,15 +1,17 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Header, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Header, Request, Query
 from uuid import uuid4
 from .models import VaultItem, VaultItemType, Folder, File as VaultFile, EncryptedKey, User, AuthSession, Share, ShareAccessLog
 from .database import Base, engine, SessionLocal
 from .utils import STORAGE_PATH, generate_token, hash_token, new_session_expiry, ensure_not_expired
 from .schemas import VaultItemResponse
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import base64
+import json
+import asyncio
 from datetime import datetime, timezone, timedelta
 from collections import deque
 from threading import Lock
@@ -39,6 +41,7 @@ ensure_sqlite_column("share_access_logs", "viewer_type", "VARCHAR")
 ensure_sqlite_column("share_access_logs", "viewer_label", "VARCHAR")
 ensure_sqlite_column("share_access_logs", "ip_address", "VARCHAR")
 ensure_sqlite_column("share_access_logs", "user_agent", "VARCHAR")
+ensure_sqlite_column("users", "notifications_seen_at", "DATETIME")
 
 app = FastAPI(title="DataGuard MVP")
 
@@ -112,6 +115,18 @@ def get_current_user(token: str = Depends(get_bearer_token)) -> User:
         return user
     finally:
         db.close()
+
+
+def resolve_user_from_access_token(db, access_token: str) -> User:
+    token_hash = hash_token(access_token)
+    session = db.query(AuthSession).filter(AuthSession.token_hash == token_hash).first()
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    ensure_not_expired(session.expires_at)
+    user = db.query(User).filter(User.id == session.user_id).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    return user
 
 
 def ensure_item_owner(db, item_id: str, user_id: str) -> VaultItem:
@@ -214,6 +229,26 @@ def create_share_access_log(
             user_agent=user_agent,
         )
     )
+
+
+def build_notification_payload(log: ShareAccessLog, share: Share, filename: str) -> dict:
+    action = log.action if log.action in {"preview", "download"} else "preview"
+    viewer = log.viewer_label or "Unknown viewer"
+    action_label = "downloaded" if action == "download" else "accessed"
+    created_at = log.created_at
+    if created_at and created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    return {
+        "id": log.id,
+        "share_id": share.id,
+        "file_id": share.vault_item_id,
+        "file_name": filename,
+        "viewer_label": viewer,
+        "action": action,
+        "type": "shared_file_downloaded" if action == "download" else "shared_link_accessed",
+        "message": f"{viewer} {action_label} {filename}",
+        "created_at": created_at,
+    }
 
 
 # -------------------------
@@ -721,6 +756,7 @@ def activity_logs(current_user: User = Depends(get_current_user)):
                 .all()
             )
             access_logs = [log for log in logs if log.action in {"preview", "download"}]
+            download_count = sum(1 for log in access_logs if log.action == "download")
 
             latest_log = access_logs[0] if access_logs else None
             expires = share.expiry_time
@@ -764,6 +800,9 @@ def activity_logs(current_user: User = Depends(get_current_user)):
                     "unique_viewer_count": len(viewer_entries),
                     "viewer_entries": viewer_entries,
                     "number_of_time_accessed": share.views or 0,
+                    "download_count": download_count,
+                    "is_downloaded": download_count > 0,
+                    "latest_action": latest_log.action if latest_log else None,
                     "latest_time_accessed": as_utc(latest_log.created_at) if latest_log else None,
                     "all_access_times": [as_utc(log.created_at) for log in access_logs],
                     "all_access_entries": [
@@ -783,6 +822,137 @@ def activity_logs(current_user: User = Depends(get_current_user)):
         return result
     finally:
         db.close()
+
+
+@app.get("/notifications")
+def list_notifications(
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+):
+    db = SessionLocal()
+    try:
+        shares = (
+            db.query(Share)
+            .filter(Share.owner_id == current_user.id)
+            .all()
+        )
+        if not shares:
+            return {"items": []}
+
+        share_map = {share.id: share for share in shares}
+        share_ids = list(share_map.keys())
+        logs = (
+            db.query(ShareAccessLog)
+            .filter(ShareAccessLog.share_id.in_(share_ids))
+            .filter(ShareAccessLog.action.in_(["preview", "download"]))
+            .order_by(ShareAccessLog.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        file_cache: dict[str, str] = {}
+        items = []
+        for log in logs:
+            share = share_map.get(log.share_id)
+            if not share:
+                continue
+            filename = file_cache.get(share.vault_item_id)
+            if filename is None:
+                file_row = db.query(VaultFile).filter(VaultFile.id == share.vault_item_id).first()
+                filename = file_row.filename if file_row else "Unknown File"
+                file_cache[share.vault_item_id] = filename
+            items.append(build_notification_payload(log, share, filename))
+        seen_at = current_user.notifications_seen_at
+        unread_query = (
+            db.query(ShareAccessLog)
+            .filter(ShareAccessLog.share_id.in_(share_ids))
+            .filter(ShareAccessLog.action.in_(["preview", "download"]))
+        )
+        if seen_at is not None:
+            unread_query = unread_query.filter(ShareAccessLog.created_at > seen_at)
+        unread_count = unread_query.count()
+        return {"items": items, "unread_count": unread_count, "seen_at": seen_at}
+    finally:
+        db.close()
+
+
+@app.post("/notifications/read-all")
+def mark_all_notifications_read(current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == current_user.id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        user.notifications_seen_at = datetime.now(timezone.utc)
+        db.commit()
+        return {"message": "Notifications marked as read", "seen_at": user.notifications_seen_at}
+    finally:
+        db.close()
+
+
+@app.get("/notifications/stream")
+async def notification_stream(access_token: str = Query(...)):
+    db = SessionLocal()
+    try:
+        user = resolve_user_from_access_token(db, access_token)
+    finally:
+        db.close()
+
+    async def event_generator():
+        stream_db = SessionLocal()
+        last_seen_at = datetime.utcnow() - timedelta(seconds=2)
+        try:
+            yield "event: ready\ndata: {\"ok\": true}\n\n"
+            while True:
+                shares = (
+                    stream_db.query(Share)
+                    .filter(Share.owner_id == user.id)
+                    .all()
+                )
+                if shares:
+                    share_map = {share.id: share for share in shares}
+                    share_ids = list(share_map.keys())
+                    logs = (
+                        stream_db.query(ShareAccessLog)
+                        .filter(ShareAccessLog.share_id.in_(share_ids))
+                        .filter(ShareAccessLog.action.in_(["preview", "download"]))
+                        .filter(ShareAccessLog.created_at > last_seen_at)
+                        .order_by(ShareAccessLog.created_at.asc())
+                        .all()
+                    )
+                    if logs:
+                        file_cache: dict[str, str] = {}
+                        for log in logs:
+                            share = share_map.get(log.share_id)
+                            if not share:
+                                continue
+                            filename = file_cache.get(share.vault_item_id)
+                            if filename is None:
+                                file_row = stream_db.query(VaultFile).filter(VaultFile.id == share.vault_item_id).first()
+                                filename = file_row.filename if file_row else "Unknown File"
+                                file_cache[share.vault_item_id] = filename
+
+                            payload = build_notification_payload(log, share, filename)
+                            yield f"event: notification\ndata: {json.dumps(payload, default=str)}\n\n"
+                            created = log.created_at
+                            if created:
+                                normalized_created = created.replace(tzinfo=None) if created.tzinfo else created
+                                if normalized_created > last_seen_at:
+                                    last_seen_at = normalized_created
+
+                yield "event: heartbeat\ndata: {}\n\n"
+                await asyncio.sleep(2)
+        finally:
+            stream_db.close()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 # -------------------------
 # AUTH - SIGNUP

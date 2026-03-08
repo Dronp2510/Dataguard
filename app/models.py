@@ -55,7 +55,8 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     salt = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
-    last_login = Column(DateTime, nullable=True)    
+    last_login = Column(DateTime, nullable=True)
+    notifications_seen_at = Column(DateTime, nullable=True)
 
 
 class Share(Base):
