@@ -57,6 +57,52 @@ function buildWatermarkedHtml(dataUrl, filename, watermarkText) {
   )}</text></svg>");background-repeat:repeat}</style></head><body><div class='wrap'><iframe src='${dataUrl}'></iframe><div class='wm'></div></div></body></html>`;
 }
 
+async function buildWatermarkedImageBlob(imageBlob, watermarkText, mimeType) {
+  const imageUrl = URL.createObjectURL(imageBlob);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = imageUrl;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Unable to watermark image");
+
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    const fontSize = Math.max(16, Math.round(Math.min(canvas.width, canvas.height) / 22));
+    const xGap = Math.max(220, Math.round(canvas.width / 3));
+    const yGap = Math.max(160, Math.round(canvas.height / 3.5));
+
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = "#222";
+    ctx.font = `${fontSize}px Arial`;
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((-25 * Math.PI) / 180);
+    for (let y = -canvas.height * 1.5; y <= canvas.height * 1.5; y += yGap) {
+      for (let x = -canvas.width * 1.5; x <= canvas.width * 1.5; x += xGap) {
+        ctx.fillText(watermarkText, x, y);
+      }
+    }
+    ctx.restore();
+
+    const targetMime = mimeType && mimeType.startsWith("image/") ? mimeType : "image/png";
+    const resultBlob = await new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), targetMime, 0.92);
+    });
+    if (!resultBlob) throw new Error("Unable to export watermarked image");
+    return resultBlob;
+  } finally {
+    URL.revokeObjectURL(imageUrl);
+  }
+}
+
 async function buildWatermarkedPdfBlob(pdfBlob, watermarkText) {
   const src = await pdfBlob.arrayBuffer();
   const pdfDoc = await PDFDocument.load(src);
@@ -92,13 +138,14 @@ function ShareAccess() {
   const [filename, setFilename] = useState("");
   const [mimeType, setMimeType] = useState("");
   const [decryptedBlob, setDecryptedBlob] = useState(null);
+  const [watermarkedBlob, setWatermarkedBlob] = useState(null);
   const [watermarkText, setWatermarkText] = useState("");
   const stampedPdfRef = useRef(null);
 
   const guestId = useMemo(() => getOrCreateGuestId(token), [token]);
   const watermarkStyle = useMemo(() => {
     const text = encodeURIComponent(watermarkText || "Protected Share");
-    const alpha = mimeType === "application/pdf" ? "0.08" : "0.15";
+    const alpha = "0.15";
     return {
       backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='220'><text x='10' y='120' fill='rgba(0,0,0,${alpha})' font-size='18' transform='rotate(-24 140,90)'>${text}</text></svg>")`,
       backgroundRepeat: "repeat",
@@ -141,6 +188,10 @@ function ShareAccess() {
           const stamped = await buildWatermarkedPdfBlob(originalBlob, wmText);
           stampedPdfRef.current = stamped;
           previewBlob = stamped;
+        } else if (mime_type.startsWith("image/")) {
+          const stamped = await buildWatermarkedImageBlob(originalBlob, wmText, mime_type);
+          stampedPdfRef.current = null;
+          previewBlob = stamped;
         } else {
           stampedPdfRef.current = null;
         }
@@ -156,6 +207,7 @@ function ShareAccess() {
         setFilename(filename);
         setMimeType(mime_type);
         setDecryptedBlob(originalBlob);
+        setWatermarkedBlob(previewBlob);
         setWatermarkText(wmText);
       } catch (err) {
         if (!active) return;
@@ -178,17 +230,19 @@ function ShareAccess() {
     return stamped;
   };
 
+  const shouldOverlayWatermark = mimeType !== "application/pdf" && !mimeType.startsWith("image/");
+
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-5xl mx-auto bg-white rounded-lg shadow p-6">
-        <h1 className="text-2xl font-bold mb-4">Shared File</h1>
+    <div className="min-h-screen bg-gray-100 p-3 md:p-6">
+      <div className="mx-auto max-w-5xl rounded-lg bg-white p-3 shadow md:p-6">
+        <h1 className="mb-4 text-xl font-bold md:text-2xl">Shared File</h1>
 
         {loading && <p className="text-gray-600">Opening shared file...</p>}
         {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
 
         {!loading && previewUrl && (
           <div className="border rounded-md overflow-hidden">
-            <div className="px-3 py-2 text-sm bg-gray-50 border-b flex justify-between items-center">
+            <div className="flex flex-col gap-2 border-b bg-gray-50 px-3 py-2 text-sm md:flex-row md:items-center md:justify-between">
               <span>{filename}</span>
               <div className="flex items-center gap-3">
                 {mimeType === "application/pdf" && (
@@ -209,13 +263,17 @@ function ShareAccess() {
                 <button
                   className="text-sm text-blue-700 hover:underline"
                   onClick={async () => {
-                    if (!decryptedBlob) return;
+                    if (!decryptedBlob || !watermarkedBlob) return;
                     const headers = { "X-Guest-Id": guestId };
                     await apiFetch(`/share/${token}/blob?action=download`, { headers });
                     if (mimeType === "application/pdf") {
                       const stamped = await getStampedPdf();
                       if (!stamped) return;
                       downloadBlob(filename, stamped);
+                      return;
+                    }
+                    if (mimeType.startsWith("image/")) {
+                      downloadBlob(filename, watermarkedBlob);
                       return;
                     }
                     const dataUrl = await bufferToDataUrl(decryptedBlob);
@@ -227,13 +285,13 @@ function ShareAccess() {
                 </button>
               </div>
             </div>
-            <div className="relative w-full h-[75vh]">
+            <div className="relative h-[60vh] w-full md:h-[75vh]">
               {mimeType.startsWith("image/") ? (
                 <img src={previewUrl} alt={filename} className="w-full h-full object-contain bg-white" />
               ) : (
                 <iframe title="shared-preview" src={previewUrl} className="w-full h-full" />
               )}
-              <div className="absolute inset-0 pointer-events-none" style={watermarkStyle} />
+              {shouldOverlayWatermark && <div className="absolute inset-0 pointer-events-none" style={watermarkStyle} />}
             </div>
           </div>
         )}

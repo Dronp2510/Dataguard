@@ -766,6 +766,15 @@ def activity_logs(current_user: User = Depends(get_current_user)):
                     "number_of_time_accessed": share.views or 0,
                     "latest_time_accessed": as_utc(latest_log.created_at) if latest_log else None,
                     "all_access_times": [as_utc(log.created_at) for log in access_logs],
+                    "all_access_entries": [
+                        {
+                            "viewer_type": log.viewer_type,
+                            "viewer_label": log.viewer_label,
+                            "action": log.action,
+                            "time_accessed": as_utc(log.created_at),
+                        }
+                        for log in access_logs
+                    ],
                     "status": status,
                     "expiry_time": share.expiry_time,
                 }

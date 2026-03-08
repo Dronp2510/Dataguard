@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Activity, FileText, Folder, Link2, ShieldCheck, Share2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useOutletContext } from "react-router-dom";
 import FilePreviewModal from "../components/FilePreviewModal";
 import { apiFetch } from "../utils/api";
 
@@ -56,6 +57,7 @@ function parseViewerLabel(label) {
 }
 
 function Home() {
+  const { searchQuery = "" } = useOutletContext() || {};
   const [recent, setRecent] = useState([]);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -112,9 +114,28 @@ function Home() {
     };
   }, []);
 
-  const totalAccess = logs.reduce((sum, row) => sum + (row.number_of_time_accessed || 0), 0);
-  const activeLinks = logs.filter((row) => row.status === "active").length;
-  const recentFiles = recent.filter((item) => item.type === "file").length;
+  const filteredRecent = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return recent;
+    return recent.filter((item) => String(item.name || "").toLowerCase().includes(q));
+  }, [recent, searchQuery]);
+
+  const filteredLogs = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return logs;
+    return logs.filter((row) => {
+      const name = String(row.name || "").toLowerCase();
+      const accessedBy = String(row.accessed_by || "").toLowerCase();
+      const viewers = Array.isArray(row.viewer_entries)
+        ? row.viewer_entries.some((viewer) => String(viewer.viewer_label || "").toLowerCase().includes(q))
+        : false;
+      return name.includes(q) || accessedBy.includes(q) || viewers;
+    });
+  }, [logs, searchQuery]);
+
+  const totalAccess = filteredLogs.reduce((sum, row) => sum + (row.number_of_time_accessed || 0), 0);
+  const activeLinks = filteredLogs.filter((row) => row.status === "active").length;
+  const recentFiles = filteredRecent.filter((item) => item.type === "file").length;
 
   return (
     <div className="space-y-8">
@@ -137,7 +158,7 @@ function Home() {
             <Folder size={18} />
           </div>
           <p className="text-sm text-gray-500">Recent uploads shown</p>
-          <p className="text-2xl font-bold text-slate-900">{recent.length}</p>
+          <p className="text-2xl font-bold text-slate-900">{filteredRecent.length}</p>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -165,11 +186,11 @@ function Home() {
 
         {loading ? (
           <p className="text-sm text-gray-500">Loading recent uploads...</p>
-        ) : recent.length === 0 ? (
+        ) : filteredRecent.length === 0 ? (
           <p className="text-sm text-gray-500">No uploads found yet.</p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {recent.map((item) => (
+            {filteredRecent.map((item) => (
               <article
                 key={`${item.type}-${item.id}`}
                 className="group rounded-xl border border-slate-200 bg-slate-50/70 p-4 transition hover:-translate-y-1 hover:border-blue-300 hover:bg-white hover:shadow-md"
@@ -229,7 +250,7 @@ function Home() {
 
         {loading ? (
           <p className="px-6 py-6 text-sm text-gray-500">Loading activity logs...</p>
-        ) : logs.length === 0 ? (
+        ) : filteredLogs.length === 0 ? (
           <p className="px-6 py-6 text-sm text-gray-500">No activity found yet.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -238,13 +259,14 @@ function Home() {
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-gray-500">
                   <th className="px-6 py-3">Name</th>
                   <th className="px-6 py-3">Accessed By</th>
+                  <th className="px-6 py-3">Unique Viewers</th>
                   <th className="px-6 py-3">No. of Access</th>
                   <th className="px-6 py-3">Latest Access Time (IST)</th>
                   <th className="px-6 py-3">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {logs.map((row) => {
+                {filteredLogs.map((row) => {
                   const parsed = parseViewerLabel(row.accessed_by);
                   const hoverText = parsed.detail ? `${parsed.id} | ${parsed.detail}` : parsed.full;
                   const isExpanded = expandedShareId === row.share_id;
@@ -265,9 +287,9 @@ function Home() {
                             title={hoverText}
                           >
                             {parsed.id}
-                            {row.unique_viewer_count > 1 ? ` (${row.unique_viewer_count})` : ""}
                           </button>
                         </td>
+                        <td className="px-6 py-3">{row.unique_viewer_count || 0}</td>
                         <td className="px-6 py-3">{row.number_of_time_accessed}</td>
                         <td className="px-6 py-3">
                           <button
@@ -288,7 +310,7 @@ function Home() {
                       </tr>
                       {isExpanded && (
                         <tr className="border-b border-slate-100 bg-slate-50/70">
-                          <td colSpan={5} className="px-6 py-4">
+                          <td colSpan={6} className="px-6 py-4">
                             <div className="grid gap-4 md:grid-cols-2">
                               <div className="rounded-md border border-slate-200 bg-white p-3">
                                 <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">Unique viewers</p>
@@ -311,12 +333,18 @@ function Home() {
                                 )}
                               </div>
                               <div className="rounded-md border border-slate-200 bg-white p-3">
-                                <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">All access times</p>
-                                {row.all_access_times?.length ? (
+                                <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">All access events</p>
+                                {row.all_access_entries?.length ? (
                                   <ul className="space-y-1 text-sm text-gray-700">
-                                    {row.all_access_times.map((time, idx) => (
-                                      <li key={`${row.share_id}-${idx}`}>{formatDateTime(time)}</li>
-                                    ))}
+                                    {row.all_access_entries.map((entry, idx) => {
+                                      const entryViewer = parseViewerLabel(entry.viewer_label);
+                                      const actionLabel = entry.action === "download" ? "download" : "preview";
+                                      return (
+                                        <li key={`${row.share_id}-entry-${idx}`}>
+                                          {entryViewer.id} - {formatDateTime(entry.time_accessed)} ({actionLabel})
+                                        </li>
+                                      );
+                                    })}
                                   </ul>
                                 ) : (
                                   <p className="text-sm text-gray-500">No access yet.</p>

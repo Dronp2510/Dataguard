@@ -11,9 +11,9 @@ function Signup() {
   const [confirm, setConfirm] = useState("");
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col lg:flex-row">
       {/* Left panel */}
-      <div className="w-1/2 bg-gradient-to-b from-slate-900 to-slate-800 text-white flex flex-col justify-center items-center px-10">
+      <div className="w-full lg:w-1/2 bg-gradient-to-b from-slate-900 to-slate-800 text-white flex flex-col justify-center items-center px-6 py-10 lg:px-10">
         <h2 className="text-3xl font-bold mb-4">Welcome Back, Friend!</h2>
         <p className="text-center text-gray-300 mb-8">
           Store and share your data safely with DataGuard
@@ -27,7 +27,7 @@ function Signup() {
       </div>
 
       {/* Right panel */}
-      <div className="w-1/2 flex items-center justify-center bg-gray-50">
+      <div className="w-full lg:w-1/2 flex items-center justify-center bg-gray-50 px-4 py-8 lg:px-6">
         <div className="w-full max-w-md">
           <h1 className="text-3xl font-bold mb-8 text-center">
             Create Account

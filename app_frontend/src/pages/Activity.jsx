@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Activity as ActivityIcon, Link2, ShieldCheck } from "lucide-react";
 import { apiFetch } from "../utils/api";
+import { useOutletContext } from "react-router-dom";
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -54,6 +55,7 @@ function parseViewerLabel(label) {
 }
 
 function Activity() {
+  const { searchQuery = "" } = useOutletContext() || {};
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -79,11 +81,24 @@ function Activity() {
     };
   }, []);
 
+  const filteredLogs = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return logs;
+    return logs.filter((row) => {
+      const name = String(row.name || "").toLowerCase();
+      const accessedBy = String(row.accessed_by || "").toLowerCase();
+      const viewers = Array.isArray(row.viewer_entries)
+        ? row.viewer_entries.some((viewer) => String(viewer.viewer_label || "").toLowerCase().includes(q))
+        : false;
+      return name.includes(q) || accessedBy.includes(q) || viewers;
+    });
+  }, [logs, searchQuery]);
+
   const totals = useMemo(() => {
-    const totalAccess = logs.reduce((sum, row) => sum + (row.number_of_time_accessed || 0), 0);
-    const activeLinks = logs.filter((row) => row.status === "active").length;
+    const totalAccess = filteredLogs.reduce((sum, row) => sum + (row.number_of_time_accessed || 0), 0);
+    const activeLinks = filteredLogs.filter((row) => row.status === "active").length;
     return { totalAccess, activeLinks };
-  }, [logs]);
+  }, [filteredLogs]);
 
   return (
     <div className="space-y-6">
@@ -96,7 +111,7 @@ function Activity() {
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">Tracked links</p>
-          <p className="text-2xl font-bold text-slate-900">{logs.length}</p>
+          <p className="text-2xl font-bold text-slate-900">{filteredLogs.length}</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">Active links</p>
@@ -125,7 +140,7 @@ function Activity() {
 
           {loading ? (
             <p className="px-6 py-6 text-sm text-gray-500">Loading activity logs...</p>
-          ) : logs.length === 0 ? (
+          ) : filteredLogs.length === 0 ? (
             <p className="px-6 py-6 text-sm text-gray-500">No activity found yet.</p>
           ) : (
             <div className="overflow-x-auto">
@@ -134,13 +149,14 @@ function Activity() {
                   <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-gray-500">
                     <th className="px-6 py-3">Name</th>
                     <th className="px-6 py-3">Accessed By</th>
+                    <th className="px-6 py-3">Unique Viewers</th>
                     <th className="px-6 py-3">No. of Access</th>
                     <th className="px-6 py-3">Latest Access Time (IST)</th>
                     <th className="px-6 py-3">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {logs.map((row) => {
+                  {filteredLogs.map((row) => {
                     const parsed = parseViewerLabel(row.accessed_by);
                     const hoverText = parsed.detail ? `${parsed.id} | ${parsed.detail}` : parsed.full;
                     const isExpanded = expandedShareId === row.share_id;
@@ -159,9 +175,9 @@ function Activity() {
                               title={hoverText}
                             >
                               {parsed.id}
-                              {row.unique_viewer_count > 1 ? ` (${row.unique_viewer_count})` : ""}
                             </button>
                           </td>
+                          <td className="px-6 py-3">{row.unique_viewer_count || 0}</td>
                           <td className="px-6 py-3">{row.number_of_time_accessed}</td>
                           <td className="px-6 py-3">
                             <button
@@ -181,7 +197,7 @@ function Activity() {
 
                         {isExpanded && (
                           <tr className="border-b border-slate-100 bg-slate-50/70">
-                            <td colSpan={5} className="px-6 py-4">
+                            <td colSpan={6} className="px-6 py-4">
                               <div className="grid gap-4 md:grid-cols-2">
                                 <div className="rounded-md border border-slate-200 bg-white p-3">
                                   <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">Unique viewers</p>
@@ -205,12 +221,18 @@ function Activity() {
                                 </div>
 
                                 <div className="rounded-md border border-slate-200 bg-white p-3">
-                                  <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">All access times</p>
-                                  {row.all_access_times?.length ? (
+                                  <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">All access events</p>
+                                  {row.all_access_entries?.length ? (
                                     <ul className="space-y-1 text-sm text-gray-700">
-                                      {row.all_access_times.map((time, idx) => (
-                                        <li key={`${row.share_id}-${idx}`}>{formatDateTime(time)}</li>
-                                      ))}
+                                      {row.all_access_entries.map((entry, idx) => {
+                                        const entryViewer = parseViewerLabel(entry.viewer_label);
+                                        const actionLabel = entry.action === "download" ? "download" : "preview";
+                                        return (
+                                          <li key={`${row.share_id}-entry-${idx}`}>
+                                            {entryViewer.id} - {formatDateTime(entry.time_accessed)} ({actionLabel})
+                                          </li>
+                                        );
+                                      })}
                                     </ul>
                                   ) : (
                                     <p className="text-sm text-gray-500">No access yet.</p>

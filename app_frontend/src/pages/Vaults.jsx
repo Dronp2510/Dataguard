@@ -3,17 +3,19 @@ import ShareModal from "../components/ShareModal";
 import AddItemModal from "../components/AddItemModal";
 import FilePreviewModal from "../components/FilePreviewModal";
 import { useEffect, useMemo, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 import RenameModal from "../components/RenameModal";
 import DeleteConfirmModal from "../components/DeleteConfirmModal";
 import { getMasterKey } from "../utils/keyStore";
 import { apiFetch } from "../utils/api";
 
 function Vaults() {
+  const { searchQuery = "" } = useOutletContext() || {};
   const [ready, setReady] = useState(false);
   const [items, setItems] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [currentFolderId, setCurrentFolderId] = useState(null);
+  const [currentFolder, setCurrentFolder] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
   const [renameItem, setRenameItem] = useState(null);
   const [deleteItem, setDeleteItem] = useState(null);
@@ -44,7 +46,7 @@ function Vaults() {
     (async () => {
       try {
         setLoadingItems(true);
-        const data = await fetchVaultItems(currentFolderId);
+        const data = await fetchVaultItems(currentFolder?.id || null);
         if (active) setItems(data);
       } catch (err) {
         console.error("Failed to load vault items", err);
@@ -55,7 +57,7 @@ function Vaults() {
     return () => {
       active = false;
     };
-  }, [currentFolderId, ready]);
+  }, [currentFolder, ready]);
 
   useEffect(() => {
     const handleClickOutside = () => setOpenMenuId(null);
@@ -63,8 +65,13 @@ function Vaults() {
     return () => window.removeEventListener("click", handleClickOutside);
   }, []);
 
-  const fileCount = useMemo(() => items.filter((item) => item.type === "file").length, [items]);
-  const folderCount = useMemo(() => items.filter((item) => item.type === "folder").length, [items]);
+  const filteredItems = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((item) => String(item.name || "").toLowerCase().includes(q));
+  }, [items, searchQuery]);
+  const fileCount = useMemo(() => filteredItems.filter((item) => item.type === "file").length, [filteredItems]);
+  const folderCount = useMemo(() => filteredItems.filter((item) => item.type === "folder").length, [filteredItems]);
 
   if (!ready) return null;
 
@@ -90,7 +97,7 @@ function Vaults() {
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">Items in current view</p>
-          <p className="text-2xl font-bold text-slate-900">{items.length}</p>
+          <p className="text-2xl font-bold text-slate-900">{filteredItems.length}</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-sm text-gray-500">Files</p>
@@ -102,14 +109,14 @@ function Vaults() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-visible">
         <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
           <div className="flex items-center gap-2 text-sm text-slate-600">
             <FolderOpen size={16} />
-            {currentFolderId ? `Inside folder: ${currentFolderId}` : "Root Vault"}
+            {currentFolder ? `Inside folder: ${currentFolder.name}` : "Root Vault"}
           </div>
-          {currentFolderId && (
-            <button className="text-sm text-blue-700 hover:underline" onClick={() => setCurrentFolderId(null)}>
+          {currentFolder && (
+            <button className="text-sm text-blue-700 hover:underline" onClick={() => setCurrentFolder(null)}>
               Back to root
             </button>
           )}
@@ -117,17 +124,17 @@ function Vaults() {
 
         {loadingItems ? (
           <p className="px-6 py-6 text-sm text-gray-500">Loading vault items...</p>
-        ) : items.length === 0 ? (
+        ) : filteredItems.length === 0 ? (
           <p className="px-6 py-6 text-sm text-gray-500">No files or folders found.</p>
         ) : (
           <div className="divide-y divide-slate-100">
-            {items.map((item) => (
+            {filteredItems.map((item) => (
               <div key={item.id} className="flex items-center justify-between gap-4 px-6 py-4 hover:bg-slate-50">
                 <button
                   type="button"
                   className="flex min-w-0 flex-1 items-center gap-4 text-left"
                   onClick={() => {
-                    if (item.type === "folder") setCurrentFolderId(item.id);
+                    if (item.type === "folder") setCurrentFolder({ id: item.id, name: item.name });
                     else setPreviewFile(item);
                   }}
                 >
@@ -171,7 +178,7 @@ function Vaults() {
                     </button>
 
                     {openMenuId === item.id && (
-                      <div className="absolute right-0 mt-2 w-32 rounded-md border bg-white shadow-md z-50">
+                      <div className="absolute bottom-full right-0 z-50 mb-2 w-32 rounded-md border bg-white shadow-md">
                         <button
                           className="block w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
                           onClick={(e) => {
@@ -221,7 +228,7 @@ function Vaults() {
               headers: { "Content-Type": "application/x-www-form-urlencoded" },
               body: `new_name=${encodeURIComponent(newName)}`,
             });
-            const data = await fetchVaultItems(currentFolderId);
+            const data = await fetchVaultItems(currentFolder?.id || null);
             setItems(data);
             setRenameItem(null);
           }}
@@ -234,7 +241,7 @@ function Vaults() {
           onClose={() => setDeleteItem(null)}
           onDelete={async () => {
             await apiFetch(`/vault/items/${deleteItem.id}`, { method: "DELETE" });
-            const data = await fetchVaultItems(currentFolderId);
+            const data = await fetchVaultItems(currentFolder?.id || null);
             setItems(data);
             setDeleteItem(null);
           }}
@@ -245,10 +252,10 @@ function Vaults() {
 
       {showAddModal && (
         <AddItemModal
-          parentFolderId={currentFolderId}
+          parentFolderId={currentFolder?.id || null}
           onClose={() => setShowAddModal(false)}
           onSuccess={() => {
-            fetchVaultItems(currentFolderId).then((data) => {
+            fetchVaultItems(currentFolder?.id || null).then((data) => {
               setItems(data);
               setShowAddModal(false);
             });

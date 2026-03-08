@@ -8,10 +8,12 @@ const items = [
   { to: "/app/settings", label: "Settings", icon: Settings },
 ];
 
-function Sidebar({ collapsed = false }) {
+function Sidebar({ collapsed = false, mobileOpen = false, onClose }) {
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-30 hidden border-r border-slate-800 bg-gradient-to-b from-slate-950 via-slate-900 to-blue-950 text-white shadow-2xl transition-all duration-300 md:block ${
+      className={`fixed inset-y-0 left-0 z-40 border-r border-slate-800 bg-gradient-to-b from-slate-900 via-blue-900 to-blue-700 text-white shadow-2xl transition-all duration-300 ${
+        mobileOpen ? "translate-x-0" : "-translate-x-full"
+      } md:translate-x-0 ${
         collapsed ? "w-20" : "w-64"
       }`}
     >
@@ -31,6 +33,7 @@ function Sidebar({ collapsed = false }) {
               to={item.to}
               end={item.end}
               title={collapsed ? item.label : undefined}
+              onClick={() => onClose?.()}
               className={({ isActive }) =>
                 `group flex items-center rounded-lg px-3 py-2.5 text-sm transition ${
                   collapsed ? "justify-center" : "gap-3"
