@@ -50,7 +50,14 @@ If env vars are not set locally:
 - Storage defaults to `./secure_storage`
 - CORS defaults to localhost frontend origins only (`http://localhost:5173`, `http://127.0.0.1:5173`)
 
-## 6. Security checks before connect
+## 6. Dependency setup
+
+Backend deploy uses runtime dependencies from `requirements.txt` only.
+
+- Render/install runtime only: `pip install -r requirements.txt`
+- Full local setup (optional extras/dev tools): `pip install -r requirements.txt -r requirements-dev.txt`
+
+## 7. Security checks before connect
 
 - Keep GitHub app scope to `Only select repositories`.
 - Do not grant additional repository permissions unless needed.
@@ -60,6 +67,6 @@ If env vars are not set locally:
   - `CORS_ORIGINS=https://<your-frontend-domain>`
   - `MAX_UPLOAD_BYTES=26214400` (25 MB)
 
-## 7. One-time history cleanup (recommended)
+## 8. One-time history cleanup (recommended)
 
 Past commits previously included files under `secure_storage/`. If any were real sensitive files, clean git history before making the repo public or widely shared.
