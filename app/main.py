@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Header, Request, Query
 from uuid import uuid4
-from .models import VaultItem, VaultItemType, Folder, File as VaultFile, EncryptedKey, User, AuthSession, Share, ShareAccessLog
+from .models import VaultItem, VaultItemType, Folder, File as VaultFile, EncryptedKey, User, AuthSession, Share, ShareAccessLog, DeviceIdentity
 from .database import Base, engine, SessionLocal
 from .utils import STORAGE_PATH, generate_token, hash_token, new_session_expiry, ensure_not_expired
 from .schemas import VaultItemResponse
@@ -129,6 +129,43 @@ def resolve_user_from_access_token(db, access_token: str) -> User:
     return user
 
 
+def normalize_guest_id(raw_guest_id: str | None) -> str | None:
+    if not raw_guest_id:
+        return None
+    guest_id = raw_guest_id.strip()
+    if not guest_id:
+        return None
+    return guest_id[:80]
+
+
+def user_watermark_label(user: User) -> str:
+    return f"User: {user.id} | {user.username}"
+
+
+def bind_guest_identity_to_user(db, raw_guest_id: str | None, user: User) -> None:
+    guest_id = normalize_guest_id(raw_guest_id)
+    if not guest_id:
+        return
+
+    binding = db.query(DeviceIdentity).filter(DeviceIdentity.guest_id == guest_id).first()
+    if binding:
+        binding.user_id = user.id
+    else:
+        db.add(DeviceIdentity(guest_id=guest_id, user_id=user.id))
+
+    # Upgrade historical guest logs from this device id to permanent user identity.
+    db.query(ShareAccessLog).filter(
+        ShareAccessLog.viewer_type == "guest",
+        ShareAccessLog.viewer_label.like(f"Guest: {guest_id} |%"),
+    ).update(
+        {
+            "viewer_type": "signed_user",
+            "viewer_label": user_watermark_label(user),
+        },
+        synchronize_session=False,
+    )
+
+
 def ensure_item_owner(db, item_id: str, user_id: str) -> VaultItem:
     item = db.query(VaultItem).filter(VaultItem.id == item_id).first()
     if not item:
@@ -193,13 +230,18 @@ def resolve_viewer_identity(
                     ensure_not_expired(session.expires_at)
                     user = db.query(User).filter(User.id == session.user_id).first()
                     if user:
-                        return ("signed_user", f"User: {user.id} | {user.username}")
+                        return ("signed_user", user_watermark_label(user))
                 except HTTPException:
                     pass
 
     token_prefix = token[:8]
-    if x_guest_id and x_guest_id.strip():
-        normalized_guest = x_guest_id.strip()[:80]
+    normalized_guest = normalize_guest_id(x_guest_id)
+    if normalized_guest:
+        binding = db.query(DeviceIdentity).filter(DeviceIdentity.guest_id == normalized_guest).first()
+        if binding:
+            user = db.query(User).filter(User.id == binding.user_id).first()
+            if user:
+                return ("signed_user", user_watermark_label(user))
         return ("guest", f"Guest: {normalized_guest} | Link: {token_prefix}")
 
     ip_part = request.client.host if request and request.client and request.client.host else "unknown"
@@ -995,7 +1037,12 @@ def signup(
 # AUTH - LOGIN
 # -------------------------
 @app.post("/auth/login")
-def login(request: Request, email: str = Form(...), password: str = Form(...)):
+def login(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    x_guest_id: str | None = Header(default=None),
+):
     db = SessionLocal()
     try:
         client = client_identity(request)
@@ -1013,6 +1060,7 @@ def login(request: Request, email: str = Form(...), password: str = Form(...)):
             expires_at=new_session_expiry(),
         )
         db.add(session)
+        bind_guest_identity_to_user(db, x_guest_id, user)
         db.commit()
 
         return {

@@ -97,3 +97,13 @@ class ShareAccessLog(Base):
     ip_address = Column(String, nullable=True)
     user_agent = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class DeviceIdentity(Base):
+    __tablename__ = "device_identities"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    guest_id = Column(String, unique=True, nullable=False)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
