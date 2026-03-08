@@ -431,11 +431,7 @@ function ShareAccess() {
             <div className="relative h-[68vh] w-full bg-black md:h-[75vh]">
               {mimeType.startsWith("image/") ? (
                 <div className="h-full w-full overflow-auto">
-                  <img
-                    src={previewUrl}
-                    alt={filename}
-                    className="mx-auto block h-auto max-h-full w-auto max-w-full bg-black object-contain"
-                  />
+                  <img src={previewUrl} alt={filename} className="mx-auto block h-auto max-w-full bg-black" />
                 </div>
               ) : mimeType === "application/pdf" ? (
                 <object data={previewUrl} type="application/pdf" className="h-full w-full bg-white">

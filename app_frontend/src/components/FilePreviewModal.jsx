@@ -107,12 +107,8 @@ function FilePreviewModal({ file, onClose }) {
 
         <div className="flex-1">
           {previewUrl && isImage && (
-            <div className="flex h-full w-full items-center justify-center bg-black p-2">
-              <img
-                src={previewUrl}
-                alt={file.name}
-                className="block h-auto max-h-full w-auto max-w-full object-contain"
-              />
+            <div className="h-full w-full overflow-auto bg-black">
+              <img src={previewUrl} alt={file.name} className="mx-auto block h-auto max-w-full" />
             </div>
           )}
           {previewUrl && isPdf && (
