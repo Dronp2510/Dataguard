@@ -3,6 +3,8 @@ import { useParams } from "react-router-dom";
 import { apiFetch } from "../utils/api";
 import { decryptFile, decryptSharedFileKey, deriveShareKey } from "../utils/crypto";
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
+import mammoth from "mammoth";
+import JSZip from "jszip";
 
 function getOrCreateGuestId(token) {
   const key = `dg_guest_${token}`;
@@ -60,6 +62,27 @@ function normalizeWatermarkText(value) {
   if (!cleaned) return "Protected Share";
   if (cleaned.length <= 120) return cleaned;
   return `${cleaned.slice(0, 117)}...`;
+}
+
+function escapeXml(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function isDocxMime(mimeType) {
+  return mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+}
+
+function isTextMime(mimeType) {
+  return mimeType.startsWith("text/");
+}
+
+function isVideoMime(mimeType) {
+  return mimeType.startsWith("video/");
 }
 
 function buildWatermarkedHtml(dataUrl, filename, watermarkText) {
@@ -148,6 +171,46 @@ async function buildWatermarkedPdfBlob(pdfBlob, watermarkText) {
   return new Blob([out], { type: "application/pdf" });
 }
 
+function buildWatermarkedVideoHtml(dataUrl, filename, watermarkText) {
+  return `<!doctype html><html><head><meta charset='utf-8'><title>${filename}</title><style>body{margin:0;background:#111;font-family:Arial}.wrap{position:relative;height:100vh;display:flex;align-items:center;justify-content:center}video{max-width:100%;max-height:100%;background:#000}.wm{position:absolute;inset:0;pointer-events:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='220'><text x='10' y='120' fill='rgba(255,255,255,0.2)' stroke='rgba(0,0,0,0.28)' stroke-width='0.5' font-size='18' transform='rotate(-24 140,90)'>${encodeURIComponent(
+    watermarkText
+  )}</text></svg>");background-repeat:repeat}</style></head><body><div class='wrap'><video src='${dataUrl}' controls playsinline></video><div class='wm'></div></div></body></html>`;
+}
+
+async function buildDocxPreviewHtml(docxBlob) {
+  const src = await docxBlob.arrayBuffer();
+  const { value } = await mammoth.convertToHtml({ arrayBuffer: src });
+  return value || "<p>Unable to render DOCX preview.</p>";
+}
+
+async function buildWatermarkedDocxBlob(docxBlob, watermarkText) {
+  const src = await docxBlob.arrayBuffer();
+  const zip = await JSZip.loadAsync(src);
+  const documentXml = zip.file("word/document.xml");
+  if (!documentXml) throw new Error("DOCX content not found");
+
+  const xml = await documentXml.async("string");
+  const safeText = escapeXml(normalizeWatermarkText(watermarkText));
+  const wmParagraph = `<w:p><w:r><w:rPr><w:color w:val="BDBDBD"/><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">${safeText}</w:t></w:r></w:p>`;
+  const wmBlock = Array.from({ length: 6 }, () => wmParagraph).join("");
+
+  let updatedXml = xml.replace(/<w:body[^>]*>/, (match) => `${match}${wmBlock}`);
+  updatedXml = updatedXml.replace("</w:body>", `${wmBlock}</w:body>`);
+
+  zip.file("word/document.xml", updatedXml);
+  return zip.generateAsync({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+}
+
+async function buildWatermarkedTextBlob(textBlob, watermarkText) {
+  const src = await textBlob.text();
+  const line = `\n[WATERMARK] ${normalizeWatermarkText(watermarkText)}\n`;
+  const out = `${line}${src}${line}`;
+  return new Blob([out], { type: "text/plain;charset=utf-8" });
+}
+
 function ShareAccess() {
   const { token } = useParams();
   const [error, setError] = useState("");
@@ -158,7 +221,10 @@ function ShareAccess() {
   const [decryptedBlob, setDecryptedBlob] = useState(null);
   const [watermarkedBlob, setWatermarkedBlob] = useState(null);
   const [watermarkText, setWatermarkText] = useState("");
+  const [docxHtml, setDocxHtml] = useState("");
+  const [textPreview, setTextPreview] = useState("");
   const stampedPdfRef = useRef(null);
+  const stampedDocxRef = useRef(null);
   const isMobile = useMemo(
     () => typeof window !== "undefined" && /android|iphone|ipad|ipod/i.test(window.navigator.userAgent || ""),
     []
@@ -180,6 +246,8 @@ function ShareAccess() {
     (async () => {
       setLoading(true);
       setError("");
+      setDocxHtml("");
+      setTextPreview("");
       try {
         const linkSecret = readLinkSecretFromHash();
         if (!linkSecret) {
@@ -209,13 +277,26 @@ function ShareAccess() {
         if (mime_type === "application/pdf") {
           const stamped = await buildWatermarkedPdfBlob(originalBlob, wmText);
           stampedPdfRef.current = stamped;
+          stampedDocxRef.current = null;
           previewBlob = stamped;
         } else if (mime_type.startsWith("image/")) {
           const stamped = await buildWatermarkedImageBlob(originalBlob, wmText, mime_type);
           stampedPdfRef.current = null;
+          stampedDocxRef.current = null;
           previewBlob = stamped;
+        } else if (isDocxMime(mime_type)) {
+          stampedPdfRef.current = null;
+          stampedDocxRef.current = null;
+          const rendered = await buildDocxPreviewHtml(originalBlob);
+          if (active) setDocxHtml(rendered);
+        } else if (isTextMime(mime_type)) {
+          stampedPdfRef.current = null;
+          stampedDocxRef.current = null;
+          const text = await originalBlob.text();
+          if (active) setTextPreview(text);
         } else {
           stampedPdfRef.current = null;
+          stampedDocxRef.current = null;
         }
 
         const url = URL.createObjectURL(previewBlob);
@@ -252,7 +333,15 @@ function ShareAccess() {
     return stamped;
   };
 
-  const shouldOverlayWatermark = mimeType !== "application/pdf" && !mimeType.startsWith("image/");
+  const getStampedDocx = async () => {
+    if (!decryptedBlob || !isDocxMime(mimeType)) return null;
+    if (stampedDocxRef.current) return stampedDocxRef.current;
+    const stamped = await buildWatermarkedDocxBlob(decryptedBlob, watermarkText);
+    stampedDocxRef.current = stamped;
+    return stamped;
+  };
+
+  const shouldOverlayWatermark = mimeType !== "application/pdf" && !mimeType.startsWith("image/") && !isDocxMime(mimeType);
 
   return (
     <div className="min-h-screen bg-gray-100 p-3 md:p-6">
@@ -313,6 +402,23 @@ function ShareAccess() {
                       downloadBlob(filename, watermarkedBlob);
                       return;
                     }
+                    if (isDocxMime(mimeType)) {
+                      const stampedDocx = await getStampedDocx();
+                      if (!stampedDocx) return;
+                      downloadBlob(filename, stampedDocx);
+                      return;
+                    }
+                    if (isTextMime(mimeType)) {
+                      const stampedText = await buildWatermarkedTextBlob(decryptedBlob, watermarkText);
+                      downloadBlob(filename, stampedText);
+                      return;
+                    }
+                    if (isVideoMime(mimeType)) {
+                      const dataUrl = await bufferToDataUrl(decryptedBlob);
+                      const html = buildWatermarkedVideoHtml(dataUrl, filename, watermarkText);
+                      downloadBlob(`${filename}.watermarked.html`, new Blob([html], { type: "text/html" }));
+                      return;
+                    }
                     const dataUrl = await bufferToDataUrl(decryptedBlob);
                     const html = buildWatermarkedHtml(dataUrl, filename, watermarkText);
                     downloadBlob(`${filename}.watermarked.html`, new Blob([html], { type: "text/html" }));
@@ -331,6 +437,19 @@ function ShareAccess() {
                 <object data={previewUrl} type="application/pdf" className="h-full w-full bg-white">
                   <iframe title="shared-preview" src={previewUrl} className="h-full w-full" />
                 </object>
+              ) : isDocxMime(mimeType) ? (
+                <div className="h-full w-full overflow-auto bg-white p-6">
+                  <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: docxHtml }} />
+                  <div className="pointer-events-none absolute inset-0" style={watermarkStyle} />
+                </div>
+              ) : isTextMime(mimeType) ? (
+                <div className="h-full w-full overflow-auto bg-white p-6">
+                  <pre className="whitespace-pre-wrap break-words text-sm text-gray-900">{textPreview}</pre>
+                </div>
+              ) : isVideoMime(mimeType) ? (
+                <div className="h-full w-full bg-black">
+                  <video src={previewUrl} controls className="h-full w-full" />
+                </div>
               ) : (
                 <iframe title="shared-preview" src={previewUrl} className="w-full h-full" />
               )}

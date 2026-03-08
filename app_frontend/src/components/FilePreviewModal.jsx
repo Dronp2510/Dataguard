@@ -3,10 +3,25 @@ import { useEffect, useState } from "react";
 import { getMasterKey } from "../utils/keyStore";
 import { decryptFileKey, decryptFile } from "../utils/crypto";
 import { apiFetch } from "../utils/api";
+import mammoth from "mammoth";
+
+function isDocxMime(mimeType) {
+  return mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+}
+
+function isTextMime(mimeType) {
+  return mimeType.startsWith("text/");
+}
+
+function isVideoMime(mimeType) {
+  return mimeType.startsWith("video/");
+}
 
 function FilePreviewModal({ file, onClose }) {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [mimeType, setMimeType] = useState("");
+  const [docxHtml, setDocxHtml] = useState("");
+  const [textPreview, setTextPreview] = useState("");
 
   useEffect(() => {
     if (!file) return;
@@ -38,6 +53,20 @@ function FilePreviewModal({ file, onClose }) {
 
       // 5) Create preview URL
       const blob = new Blob([decryptedBuffer], { type: mime_type });
+      if (isDocxMime(mime_type)) {
+        const rendered = await mammoth.convertToHtml({ arrayBuffer: decryptedBuffer });
+        if (!active) return;
+        setDocxHtml(rendered.value || "<p>Unable to render DOCX preview.</p>");
+        setTextPreview("");
+      } else if (isTextMime(mime_type)) {
+        const text = new TextDecoder("utf-8").decode(decryptedBuffer);
+        if (!active) return;
+        setTextPreview(text);
+        setDocxHtml("");
+      } else if (active) {
+        setDocxHtml("");
+        setTextPreview("");
+      }
       const url = URL.createObjectURL(blob);
       nextPreviewUrl = url;
       if (!active) {
@@ -62,6 +91,9 @@ function FilePreviewModal({ file, onClose }) {
 
   const isImage = mimeType.startsWith("image/");
   const isPdf = mimeType === "application/pdf";
+  const isDocx = isDocxMime(mimeType);
+  const isText = isTextMime(mimeType);
+  const isVideo = isVideoMime(mimeType);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
@@ -84,7 +116,24 @@ function FilePreviewModal({ file, onClose }) {
               <iframe src={previewUrl} title="File Preview" className="h-full w-full" />
             </object>
           )}
-          {previewUrl && !isImage && !isPdf && <iframe src={previewUrl} title="File Preview" className="h-full w-full" />}
+          {previewUrl && isDocx && (
+            <div className="h-full w-full overflow-auto bg-white p-6">
+              <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: docxHtml }} />
+            </div>
+          )}
+          {previewUrl && isText && (
+            <div className="h-full w-full overflow-auto bg-white p-6">
+              <pre className="whitespace-pre-wrap break-words text-sm text-gray-900">{textPreview}</pre>
+            </div>
+          )}
+          {previewUrl && isVideo && (
+            <div className="h-full w-full bg-black">
+              <video src={previewUrl} controls className="h-full w-full" />
+            </div>
+          )}
+          {previewUrl && !isImage && !isPdf && !isDocx && !isText && !isVideo && (
+            <iframe src={previewUrl} title="File Preview" className="h-full w-full" />
+          )}
         </div>
       </div>
     </div>
