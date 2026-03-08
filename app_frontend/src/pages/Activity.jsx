@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { Activity as ActivityIcon, Link2, ShieldCheck } from "lucide-react";
 import { apiFetch } from "../utils/api";
 
 function formatDateTime(value) {
@@ -78,121 +79,164 @@ function Activity() {
     };
   }, []);
 
+  const totals = useMemo(() => {
+    const totalAccess = logs.reduce((sum, row) => sum + (row.number_of_time_accessed || 0), 0);
+    const activeLinks = logs.filter((row) => row.status === "active").length;
+    return { totalAccess, activeLinks };
+  }, [logs]);
+
   return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-3xl font-bold">My Activity</h2>
-        <p className="text-sm text-gray-500 mt-1">Share access logs for your files</p>
-      </div>
+    <div className="space-y-6">
+      <section className="rounded-2xl border border-blue-200 bg-gradient-to-r from-slate-900 via-blue-900 to-blue-700 px-7 py-8 text-white shadow-lg">
+        <p className="text-xs uppercase tracking-[0.2em] text-blue-100">Share Analytics</p>
+        <h2 className="mt-3 text-3xl font-bold">My Activity</h2>
+        <p className="mt-2 text-sm text-blue-100">Track who accessed your shared files and when.</p>
+      </section>
 
-      {loading && <p className="text-gray-500">Loading activity logs...</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      <section className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">Tracked links</p>
+          <p className="text-2xl font-bold text-slate-900">{logs.length}</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">Active links</p>
+          <p className="text-2xl font-bold text-slate-900">{totals.activeLinks}</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-sm text-gray-500">Total accesses</p>
+          <p className="text-2xl font-bold text-slate-900">{totals.totalAccess}</p>
+        </div>
+      </section>
 
-      {!loading && !error && (
-        <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-          <div className="grid grid-cols-12 gap-3 px-4 py-3 text-xs font-semibold text-gray-500 border-b bg-gray-50">
-            <div className="col-span-3">Name</div>
-            <div className="col-span-3">Accessed By</div>
-            <div className="col-span-2">No. of Access</div>
-            <div className="col-span-2">Latest Access Time (IST)</div>
-            <div className="col-span-2">Status</div>
+      {error && <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+
+      {!error && (
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-4">
+            <div className="inline-flex items-center gap-2 text-slate-900">
+              <ActivityIcon size={16} />
+              <h3 className="font-semibold">Activity Log</h3>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-1.5 text-xs text-white">
+              <ShieldCheck size={14} />
+              Protected
+            </div>
           </div>
 
-          {logs.length === 0 && (
-            <div className="px-4 py-8 text-sm text-gray-500">No activity found yet.</div>
-          )}
-
-          {logs.map((row) => (
-            <div key={row.share_id} className="border-b last:border-b-0">
-              <div className="grid grid-cols-12 gap-3 px-4 py-3 text-sm items-center">
-                <div className="col-span-3 truncate font-medium" title={row.name}>
-                  {row.name}
-                </div>
-                <div className="col-span-3 truncate" title={row.accessed_by}>
-                  {(() => {
+          {loading ? (
+            <p className="px-6 py-6 text-sm text-gray-500">Loading activity logs...</p>
+          ) : logs.length === 0 ? (
+            <p className="px-6 py-6 text-sm text-gray-500">No activity found yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-gray-500">
+                    <th className="px-6 py-3">Name</th>
+                    <th className="px-6 py-3">Accessed By</th>
+                    <th className="px-6 py-3">No. of Access</th>
+                    <th className="px-6 py-3">Latest Access Time (IST)</th>
+                    <th className="px-6 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map((row) => {
                     const parsed = parseViewerLabel(row.accessed_by);
                     const hoverText = parsed.detail ? `${parsed.id} | ${parsed.detail}` : parsed.full;
+                    const isExpanded = expandedShareId === row.share_id;
+
                     return (
-                  <button
-                    className="text-left text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
-                    disabled={!row.viewer_entries?.length}
-                    onClick={() =>
-                      setExpandedShareId(expandedShareId === row.share_id ? null : row.share_id)
-                    }
-                    title={hoverText}
-                  >
-                    {parsed.id}
-                    {row.unique_viewer_count > 1 ? ` (${row.unique_viewer_count})` : ""}
-                  </button>
+                      <Fragment key={row.share_id}>
+                        <tr className="border-b border-slate-100 hover:bg-slate-50">
+                          <td className="px-6 py-3 font-medium text-slate-900" title={row.name}>
+                            <span className="block max-w-xs truncate">{row.name}</span>
+                          </td>
+                          <td className="px-6 py-3">
+                            <button
+                              className="text-left text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
+                              disabled={!row.viewer_entries?.length}
+                              onClick={() => setExpandedShareId(isExpanded ? null : row.share_id)}
+                              title={hoverText}
+                            >
+                              {parsed.id}
+                              {row.unique_viewer_count > 1 ? ` (${row.unique_viewer_count})` : ""}
+                            </button>
+                          </td>
+                          <td className="px-6 py-3">{row.number_of_time_accessed}</td>
+                          <td className="px-6 py-3">
+                            <button
+                              className="text-left text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
+                              disabled={!row.latest_time_accessed}
+                              onClick={() => setExpandedShareId(isExpanded ? null : row.share_id)}
+                            >
+                              {formatDateTime(row.latest_time_accessed)}
+                            </button>
+                          </td>
+                          <td className="px-6 py-3">
+                            <span className={`inline-flex rounded-full px-2 py-1 text-xs ${statusStyle(row.status)}`}>
+                              {statusLabel(row.status)}
+                            </span>
+                          </td>
+                        </tr>
+
+                        {isExpanded && (
+                          <tr className="border-b border-slate-100 bg-slate-50/70">
+                            <td colSpan={5} className="px-6 py-4">
+                              <div className="grid gap-4 md:grid-cols-2">
+                                <div className="rounded-md border border-slate-200 bg-white p-3">
+                                  <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">Unique viewers</p>
+                                  {row.viewer_entries?.length ? (
+                                    <ul className="space-y-1 text-sm text-gray-700">
+                                      {row.viewer_entries.map((viewer, idx) => {
+                                        const viewerParsed = parseViewerLabel(viewer.viewer_label);
+                                        const viewerHover = viewerParsed.detail
+                                          ? `${viewerParsed.id} | ${viewerParsed.detail}`
+                                          : viewerParsed.full;
+                                        return (
+                                          <li key={`${row.share_id}-viewer-${idx}`} title={viewerHover}>
+                                            {viewerParsed.id} - {formatDateTime(viewer.latest_time_accessed)} ({viewer.access_count})
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  ) : (
+                                    <p className="text-sm text-gray-500">No access yet.</p>
+                                  )}
+                                </div>
+
+                                <div className="rounded-md border border-slate-200 bg-white p-3">
+                                  <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">All access times</p>
+                                  {row.all_access_times?.length ? (
+                                    <ul className="space-y-1 text-sm text-gray-700">
+                                      {row.all_access_times.map((time, idx) => (
+                                        <li key={`${row.share_id}-${idx}`}>{formatDateTime(time)}</li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <p className="text-sm text-gray-500">No access yet.</p>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
-                  })()}
-                </div>
-                <div className="col-span-2">{row.number_of_time_accessed}</div>
-                <div className="col-span-2">
-                  <button
-                    className="text-left text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
-                    disabled={!row.latest_time_accessed}
-                    onClick={() =>
-                      setExpandedShareId(expandedShareId === row.share_id ? null : row.share_id)
-                    }
-                  >
-                    {formatDateTime(row.latest_time_accessed)}
-                  </button>
-                </div>
-                <div className="col-span-2">
-                  <span
-                    className={`inline-flex text-xs px-2 py-1 rounded-full ${statusStyle(row.status)}`}
-                  >
-                    {statusLabel(row.status)}
-                  </span>
-                </div>
-              </div>
-
-              {expandedShareId === row.share_id && (
-                <div className="px-4 pb-4">
-                  <div className="rounded-md border bg-slate-50 p-3 space-y-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">
-                        Unique viewers
-                      </p>
-                      {row.viewer_entries?.length ? (
-                        <ul className="space-y-1 text-sm text-gray-700">
-                          {row.viewer_entries.map((viewer, idx) => {
-                            const parsed = parseViewerLabel(viewer.viewer_label);
-                            const hoverText = parsed.detail ? `${parsed.id} | ${parsed.detail}` : parsed.full;
-                            return (
-                              <li key={`${row.share_id}-viewer-${idx}`} title={hoverText}>
-                                {parsed.id} - {formatDateTime(viewer.latest_time_accessed)} ({viewer.access_count})
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-gray-500">No access yet.</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-gray-500 mb-2">
-                        All access times
-                      </p>
-                      {row.all_access_times?.length ? (
-                        <ul className="space-y-1 text-sm text-gray-700">
-                          {row.all_access_times.map((time, idx) => (
-                            <li key={`${row.share_id}-${idx}`}>{formatDateTime(time)}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-gray-500">No access yet.</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
+                  })}
+                </tbody>
+              </table>
             </div>
-          ))}
-        </div>
+          )}
+        </section>
       )}
+
+      <section className="rounded-xl border border-slate-200 bg-gradient-to-r from-blue-50 to-slate-50 p-4 text-sm text-slate-700">
+        <div className="inline-flex items-center gap-2 font-medium text-slate-900">
+          <Link2 size={16} />
+          Link hygiene
+        </div>
+        <p className="mt-1">Revoke unused links from shared files to reduce long-term exposure.</p>
+      </section>
     </div>
   );
 }

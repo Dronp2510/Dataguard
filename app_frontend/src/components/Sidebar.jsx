@@ -1,33 +1,51 @@
 import { NavLink } from "react-router-dom";
+import { Activity, FolderOpen, Home, Settings, Shield } from "lucide-react";
 
-const navItemClass = ({ isActive }) =>
-  `block px-3 py-2 rounded transition ${
-    isActive
-      ? "bg-slate-800 text-white font-semibold"
-      : "text-gray-300 hover:bg-slate-800 hover:text-white"
-  }`;
+const items = [
+  { to: "/app", label: "Home", icon: Home, end: true },
+  { to: "/app/vaults", label: "My Vaults", icon: FolderOpen },
+  { to: "/app/activity", label: "My Activity", icon: Activity },
+  { to: "/app/settings", label: "Settings", icon: Settings },
+];
 
-function Sidebar() {
+function Sidebar({ collapsed = false }) {
   return (
-    <aside className="w-64 bg-slate-900 text-white min-h-screen p-6">
-      <h1 className="text-2xl font-bold mb-10">🛡️ DataGuard</h1>
+    <aside
+      className={`fixed inset-y-0 left-0 z-30 hidden border-r border-slate-800 bg-gradient-to-b from-slate-950 via-slate-900 to-blue-950 text-white shadow-2xl transition-all duration-300 md:block ${
+        collapsed ? "w-20" : "w-64"
+      }`}
+    >
+      <div className="flex h-16 items-center gap-3 border-b border-slate-800 px-4">
+        <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600/20 text-blue-200">
+          <Shield size={18} />
+        </div>
+        {!collapsed && <span className="text-lg font-semibold tracking-wide">DataGuard</span>}
+      </div>
 
-      <nav className="space-y-4">
-        <NavLink to="/" end className={navItemClass}>
-          Home
-        </NavLink>
-
-        <NavLink to="/vaults" className={navItemClass}>
-          All Vaults
-        </NavLink>
-
-        <NavLink to="/activity" className={navItemClass}>
-          My Activity
-        </NavLink>
-
-        <NavLink to="/settings" className={navItemClass}>
-          Settings
-        </NavLink>
+      <nav className="space-y-2 p-3">
+        {items.map((item) => {
+          const Icon = item.icon;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              title={collapsed ? item.label : undefined}
+              className={({ isActive }) =>
+                `group flex items-center rounded-lg px-3 py-2.5 text-sm transition ${
+                  collapsed ? "justify-center" : "gap-3"
+                } ${
+                  isActive
+                    ? "bg-blue-600/20 text-white"
+                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                }`
+              }
+            >
+              <Icon size={18} className="shrink-0" />
+              {!collapsed && <span>{item.label}</span>}
+            </NavLink>
+          );
+        })}
       </nav>
     </aside>
   );

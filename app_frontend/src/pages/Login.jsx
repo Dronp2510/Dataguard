@@ -92,7 +92,7 @@ function Login() {
               setMasterKey(masterKey);
 
                 // ✅ 3. Navigate
-                navigate("/");
+                navigate("/app");
             }else {
               alert(data.detail || "Login failed");
             }

@@ -1,20 +1,26 @@
+import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import TopBar from "../components/TopBar";
 
 function AppLayout() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   return (
-    <div className="flex">
-      {/* Left Sidebar */}
-      <Sidebar />
+    <div className="min-h-screen bg-slate-100">
+      <Sidebar collapsed={sidebarCollapsed} />
 
-      {/* Right side */}
-      <div className="flex-1 flex flex-col min-h-screen">
-        {/* Top Bar */}
-        <TopBar />
+      <div
+        className={`min-h-screen transition-[margin] duration-300 ${
+          sidebarCollapsed ? "md:ml-20" : "md:ml-64"
+        }`}
+      >
+        <TopBar
+          sidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
+        />
 
-        {/* Page Content */}
-        <main className="flex-1 bg-gray-100 p-8">
+        <main className="p-6 md:p-8">
           <Outlet />
         </main>
       </div>

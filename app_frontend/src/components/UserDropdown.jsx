@@ -69,7 +69,13 @@ function UserDropdown() {
               View Profile
             </button>
 
-            <button className="flex items-center w-full px-3 py-2 text-sm rounded-lg hover:bg-gray-100">
+            <button
+              className="flex items-center w-full px-3 py-2 text-sm rounded-lg hover:bg-gray-100"
+              onClick={() => {
+                setOpen(false);
+                navigate("/app/settings");
+              }}
+            >
               <Settings className="w-4 h-4 mr-2" />
               Settings
             </button>

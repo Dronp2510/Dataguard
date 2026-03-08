@@ -1,13 +1,31 @@
-import { Bell } from "lucide-react";
+import { Bell, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import UserDropdown from "./UserDropdown";
 
-function TopBar() {
+function TopBar({ sidebarCollapsed = false, onToggleSidebar }) {
+  const location = useLocation();
+  const title = location.pathname.includes("/vaults")
+    ? "Vaults"
+    : location.pathname.includes("/activity")
+    ? "My Activity"
+    : location.pathname.includes("/settings")
+    ? "Settings"
+    : "Dashboard";
+
   return (
-    <header className="h-16 bg-white shadow-sm flex items-center justify-between px-6">
+    <header className="sticky top-0 z-20 h-16 bg-white/90 backdrop-blur border-b border-slate-200 flex items-center justify-between px-6">
       {/* Left */}
-      <h2 className="text-xl font-semibold text-gray-800">
-        Dashboard
-      </h2>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          className="hidden md:inline-flex rounded-lg border border-slate-200 p-2 text-slate-700 hover:bg-slate-100"
+          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+        </button>
+        <h2 className="text-xl font-semibold text-gray-800">{title}</h2>
+      </div>
 
       {/* Right */}
       <div className="flex items-center gap-4">
