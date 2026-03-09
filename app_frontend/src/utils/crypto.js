@@ -177,6 +177,27 @@ export function randomBase64(bytes = 16) {
   return bufToBase64(crypto.getRandomValues(new Uint8Array(bytes)));
 }
 
+export function supportsCompressionStreams() {
+  return typeof CompressionStream !== "undefined" && typeof DecompressionStream !== "undefined";
+}
+
+export async function gzipCompressBlob(blob) {
+  if (!supportsCompressionStreams()) {
+    throw new Error("Browser does not support CompressionStream");
+  }
+  const compressedStream = blob.stream().pipeThrough(new CompressionStream("gzip"));
+  return new Response(compressedStream).blob();
+}
+
+export async function gzipDecompressArrayBuffer(buffer) {
+  if (!supportsCompressionStreams()) {
+    throw new Error("Browser does not support DecompressionStream");
+  }
+  const compressedBlob = new Blob([buffer]);
+  const decompressedStream = compressedBlob.stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Response(decompressedStream).arrayBuffer();
+}
+
 // ---------- 9. Re-wrap encrypted file key without exporting CryptoKey ----------
 export async function rewrapFileKeyForShare(encryptedKeyB64, keyIvB64, masterKey, shareKey) {
   const encryptedKey = base64ToBuf(encryptedKeyB64);

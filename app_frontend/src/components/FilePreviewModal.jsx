@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getMasterKey } from "../utils/keyStore";
-import { decryptFileKey, decryptFile } from "../utils/crypto";
+import { decryptFile, decryptFileKey, gzipDecompressArrayBuffer } from "../utils/crypto";
 import { apiFetch } from "../utils/api";
 import mammoth from "mammoth";
 
@@ -29,55 +29,65 @@ function FilePreviewModal({ file, onClose }) {
     let nextPreviewUrl = null;
 
     const loadAndDecrypt = async () => {
-      const masterKey = getMasterKey();
-      if (!masterKey) {
-        alert("Session expired. Please login again.");
+      try {
+        const masterKey = getMasterKey();
+        if (!masterKey) {
+          alert("Session expired. Please login again.");
+          return;
+        }
+
+        // 1) Get metadata
+        const metaRes = await apiFetch(`/vault/files/${file.id}/download`);
+        const metaData = await metaRes.json();
+
+        const { mime_type, iv, encrypted_key, key_iv, is_compressed, compression_algo } = metaData.metadata;
+
+        // 2) Download encrypted blob
+        const blobRes = await apiFetch(metaData.download_url);
+        const encryptedBuffer = await blobRes.arrayBuffer();
+
+        // 3) Decrypt file key
+        const fileKey = await decryptFileKey(encrypted_key, key_iv, masterKey);
+
+        // 4) Decrypt file
+        const decryptedBuffer = await decryptFile(encryptedBuffer, iv, fileKey);
+        const normalizedBuffer =
+          is_compressed && compression_algo === "gzip"
+            ? await gzipDecompressArrayBuffer(decryptedBuffer)
+            : decryptedBuffer;
+
+        // 5) Create preview URL
+        const blob = new Blob([normalizedBuffer], { type: mime_type });
+        if (isDocxMime(mime_type)) {
+          const rendered = await mammoth.convertToHtml({ arrayBuffer: normalizedBuffer });
+          if (!active) return;
+          setDocxHtml(rendered.value || "<p>Unable to render DOCX preview.</p>");
+          setTextPreview("");
+        } else if (isTextMime(mime_type)) {
+          const text = new TextDecoder("utf-8").decode(normalizedBuffer);
+          if (!active) return;
+          setTextPreview(text);
+          setDocxHtml("");
+        } else if (active) {
+          setDocxHtml("");
+          setTextPreview("");
+        }
+        const url = URL.createObjectURL(blob);
+        nextPreviewUrl = url;
+        if (!active) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        setPreviewUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
+        setMimeType(mime_type || "");
+      } catch {
+        if (!active) return;
+        alert("Could not decrypt or decompress this file.");
         return;
       }
-
-      // 1) Get metadata
-      const metaRes = await apiFetch(`/vault/files/${file.id}/download`);
-      const metaData = await metaRes.json();
-
-      const { mime_type, iv, encrypted_key, key_iv } = metaData.metadata;
-
-      // 2) Download encrypted blob
-      const blobRes = await apiFetch(metaData.download_url);
-      const encryptedBuffer = await blobRes.arrayBuffer();
-
-      // 3) Decrypt file key
-      const fileKey = await decryptFileKey(encrypted_key, key_iv, masterKey);
-
-      // 4) Decrypt file
-      const decryptedBuffer = await decryptFile(encryptedBuffer, iv, fileKey);
-
-      // 5) Create preview URL
-      const blob = new Blob([decryptedBuffer], { type: mime_type });
-      if (isDocxMime(mime_type)) {
-        const rendered = await mammoth.convertToHtml({ arrayBuffer: decryptedBuffer });
-        if (!active) return;
-        setDocxHtml(rendered.value || "<p>Unable to render DOCX preview.</p>");
-        setTextPreview("");
-      } else if (isTextMime(mime_type)) {
-        const text = new TextDecoder("utf-8").decode(decryptedBuffer);
-        if (!active) return;
-        setTextPreview(text);
-        setDocxHtml("");
-      } else if (active) {
-        setDocxHtml("");
-        setTextPreview("");
-      }
-      const url = URL.createObjectURL(blob);
-      nextPreviewUrl = url;
-      if (!active) {
-        URL.revokeObjectURL(url);
-        return;
-      }
-      setPreviewUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return url;
-      });
-      setMimeType(mime_type || "");
     };
 
     loadAndDecrypt();

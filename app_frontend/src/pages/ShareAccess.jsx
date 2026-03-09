@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { apiFetch } from "../utils/api";
-import { decryptFile, decryptSharedFileKey, deriveShareKey } from "../utils/crypto";
+import { decryptFile, decryptSharedFileKey, deriveShareKey, gzipDecompressArrayBuffer } from "../utils/crypto";
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
 import mammoth from "mammoth";
 import JSZip from "jszip";
@@ -259,7 +259,17 @@ function ShareAccess() {
         const meta = await metaRes.json();
         if (!metaRes.ok) throw new Error(meta.detail || "Invalid share");
 
-        const { encrypted_key, key_iv, key_salt, iv, filename, mime_type } = meta.metadata;
+        const {
+          encrypted_key,
+          key_iv,
+          key_salt,
+          iv,
+          filename,
+          mime_type,
+          is_compressed,
+          compression_algo,
+          original_filename,
+        } = meta.metadata;
         const shareKey = await deriveShareKey(linkSecret, key_salt);
         const fileKey = await decryptSharedFileKey(encrypted_key, key_iv, shareKey);
 
@@ -270,7 +280,11 @@ function ShareAccess() {
         }
         const encryptedBuffer = await blobRes.arrayBuffer();
         const decryptedBuffer = await decryptFile(encryptedBuffer, iv, fileKey);
-        const originalBlob = new Blob([decryptedBuffer], { type: mime_type });
+        const normalizedBuffer =
+          is_compressed && compression_algo === "gzip"
+            ? await gzipDecompressArrayBuffer(decryptedBuffer)
+            : decryptedBuffer;
+        const originalBlob = new Blob([normalizedBuffer], { type: mime_type });
         const wmText = normalizeWatermarkText(meta.watermark_text || `Share: ${guestId} | Link: ${token.slice(0, 8)}`);
 
         let previewBlob = originalBlob;
@@ -307,7 +321,7 @@ function ShareAccess() {
           if (prev) URL.revokeObjectURL(prev);
           return url;
         });
-        setFilename(filename);
+        setFilename(original_filename || filename);
         setMimeType(mime_type);
         setDecryptedBlob(originalBlob);
         setWatermarkedBlob(previewBlob);

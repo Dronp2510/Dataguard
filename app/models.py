@@ -35,6 +35,11 @@ class File(Base):
     mime_type = Column(String, nullable=False)
     storage_path = Column(String, nullable=False)
     iv = Column(String, nullable=False)
+    is_compressed = Column(Boolean, nullable=False, default=False)
+    compression_algo = Column(String, nullable=True)
+    original_filename = Column(String, nullable=True)
+    original_size = Column(Integer, nullable=True)
+    compressed_size = Column(Integer, nullable=True)
 
 
 class EncryptedKey(Base):

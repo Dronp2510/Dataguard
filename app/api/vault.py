@@ -26,6 +26,11 @@ async def upload_encrypted_file(
     encrypted_key: str = Form(...),
     iv: str = Form(...),
     key_iv: str = Form(...),
+    is_compressed: bool = Form(False),
+    compression_algo: str | None = Form(None),
+    original_filename: str | None = Form(None),
+    original_size: int | None = Form(None),
+    compressed_size: int | None = Form(None),
     current_user: User = Depends(get_current_user),
 ):
     db = SessionLocal()
@@ -36,6 +41,13 @@ async def upload_encrypted_file(
             parent = ensure_item_owner(db, parent_folder_id, current_user.id)
             if parent.type != VaultItemType.folder:
                 raise HTTPException(status_code=400, detail="Parent must be a folder")
+
+        if is_compressed and compression_algo not in {"gzip"}:
+            raise HTTPException(status_code=400, detail="Unsupported compression algorithm")
+        if original_size is not None and original_size < 0:
+            raise HTTPException(status_code=400, detail="Invalid original_size")
+        if compressed_size is not None and compressed_size < 0:
+            raise HTTPException(status_code=400, detail="Invalid compressed_size")
 
         stored_name = str(uuid4())
         file_path = STORAGE_PATH / stored_name
@@ -67,6 +79,11 @@ async def upload_encrypted_file(
             mime_type=mime_type,
             storage_path=str(file_path),
             iv=iv,
+            is_compressed=is_compressed,
+            compression_algo=compression_algo if is_compressed else None,
+            original_filename=(original_filename or filename),
+            original_size=original_size,
+            compressed_size=compressed_size,
         )
         db.add(file)
 
@@ -130,6 +147,11 @@ def download_encrypted_file(file_id: str, current_user: User = Depends(get_curre
                 "iv": file.iv,
                 "encrypted_key": key.encrypted_key,
                 "key_iv": key.iv,
+                "is_compressed": bool(file.is_compressed),
+                "compression_algo": file.compression_algo,
+                "original_filename": file.original_filename or file.filename,
+                "original_size": file.original_size,
+                "compressed_size": file.compressed_size,
             },
             "download_url": f"/vault/files/{file_id}/blob",
         }
