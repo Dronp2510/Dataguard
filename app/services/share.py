@@ -5,7 +5,7 @@ from fastapi import HTTPException, Request
 
 from ..models import AuthSession, DeviceIdentity, Share, ShareAccessLog, User
 from ..utils import ensure_not_expired, hash_token
-from .auth import normalize_guest_id, user_watermark_label
+from .auth import bind_guest_identity_to_user, normalize_guest_id, user_watermark_label
 
 
 def get_share_or_410(db, token: str) -> Share:
@@ -32,6 +32,8 @@ def resolve_viewer_identity(
     x_guest_id: str | None,
     request: Request | None,
 ) -> tuple[str, str]:
+    normalized_guest = normalize_guest_id(x_guest_id)
+
     if authorization:
         parts = authorization.split(" ", 1)
         if len(parts) == 2 and parts[0].lower() == "bearer" and parts[1]:
@@ -42,12 +44,13 @@ def resolve_viewer_identity(
                     ensure_not_expired(session.expires_at)
                     user = db.query(User).filter(User.id == session.user_id).first()
                     if user:
+                        if normalized_guest:
+                            bind_guest_identity_to_user(db, normalized_guest, user)
                         return ("signed_user", user_watermark_label(user))
                 except HTTPException:
                     pass
 
     token_prefix = token[:8]
-    normalized_guest = normalize_guest_id(x_guest_id)
     if normalized_guest:
         binding = db.query(DeviceIdentity).filter(DeviceIdentity.guest_id == normalized_guest).first()
         if binding:
