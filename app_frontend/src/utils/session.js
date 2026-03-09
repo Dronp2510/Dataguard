@@ -6,6 +6,17 @@ function notifyAuthChanged() {
   }
 }
 
+function getStoredValue(key) {
+  const sessionValue = sessionStorage.getItem(key);
+  if (sessionValue) return sessionValue;
+  const localValue = localStorage.getItem(key);
+  if (localValue) {
+    sessionStorage.setItem(key, localValue);
+    return localValue;
+  }
+  return null;
+}
+
 function clearSessionStorageKeys() {
   sessionStorage.removeItem("dg_user_id");
   sessionStorage.removeItem("dg_salt");
@@ -22,27 +33,36 @@ function clearLegacyLocalStorageKeys() {
 }
 
 export function setSession({ user_id, salt, token, expires_at }) {
+  const expiryIso = expires_at ? new Date(expires_at).toISOString() : null;
+
   sessionStorage.setItem("dg_user_id", user_id);
   sessionStorage.setItem("dg_salt", salt);
   sessionStorage.setItem("dg_access_token", token);
-  if (expires_at) {
-    sessionStorage.setItem("dg_session_expires_at", new Date(expires_at).toISOString());
+  localStorage.setItem("dg_user_id", user_id);
+  localStorage.setItem("dg_salt", salt);
+  localStorage.setItem("dg_access_token", token);
+  if (expiryIso) {
+    sessionStorage.setItem("dg_session_expires_at", expiryIso);
+    localStorage.setItem("dg_session_expires_at", expiryIso);
+  } else {
+    sessionStorage.removeItem("dg_session_expires_at");
+    localStorage.removeItem("dg_session_expires_at");
   }
   notifyAuthChanged();
 }
 
 export function getUserId() {
-  return sessionStorage.getItem("dg_user_id");
+  return getStoredValue("dg_user_id");
 }
 
 export function getSalt() {
-  return sessionStorage.getItem("dg_salt");
+  return getStoredValue("dg_salt");
 }
 
 export function getAccessToken() {
-  const token = sessionStorage.getItem("dg_access_token");
+  const token = getStoredValue("dg_access_token");
   if (!token) return null;
-  const expiryIso = sessionStorage.getItem("dg_session_expires_at");
+  const expiryIso = getStoredValue("dg_session_expires_at");
   if (!expiryIso) return token;
   const expiryTs = Date.parse(expiryIso);
   if (Number.isNaN(expiryTs) || Date.now() < expiryTs) return token;
