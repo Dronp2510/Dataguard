@@ -8,8 +8,7 @@ import Home from "./pages/Home";
 import Vaults from "./pages/Vaults";
 import Activity from "./pages/Activity";
 import Settings from "./pages/Settings";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
+import AuthPage from "./pages/AuthPage";
 import ShareAccess from "./pages/ShareAccess";
 import Landing from "./pages/Landing";
 import Profile from "./pages/Profile";
@@ -50,8 +49,8 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={isAuthed ? <Navigate to="/app" replace /> : <Landing />} />
-        <Route path="/login" element={isAuthed ? <Navigate to="/app" replace /> : <Login />} />
-        <Route path="/signup" element={isAuthed ? <Navigate to="/app" replace /> : <Signup />} />
+        <Route path="/login" element={isAuthed ? <Navigate to="/app" replace /> : <AuthPage />} />
+        <Route path="/signup" element={isAuthed ? <Navigate to="/app" replace /> : <AuthPage />} />
         <Route path="/share/:token" element={<ShareAccess />} />
 
         <Route path="/app" element={isAuthed ? <AppLayout /> : <Navigate to="/login" replace />}>
