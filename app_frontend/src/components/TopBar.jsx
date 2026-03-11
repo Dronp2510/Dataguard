@@ -1,4 +1,4 @@
-import { Bell, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Bell, Menu, PanelLeftClose, PanelLeftOpen, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import UserDropdown from "./UserDropdown";
@@ -26,10 +26,12 @@ function TopBar({
   const [feedStatus, setFeedStatus] = useState("idle");
   const [markingRead, setMarkingRead] = useState(false);
   const [seenAt, setSeenAt] = useState(null);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const bellRef = useRef(null);
   const panelRef = useRef(null);
   const latestIdRef = useRef(null);
   const seenAtRef = useRef(null);
+  const mobileSearchInputRef = useRef(null);
 
   const title = location.pathname.includes("/vaults")
     ? "Vaults"
@@ -181,90 +183,137 @@ function TopBar({
     return () => window.removeEventListener("mousedown", onDocClick);
   }, [panelOpen]);
 
+  useEffect(() => {
+    setMobileSearchOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileSearchOpen) return;
+    mobileSearchInputRef.current?.focus();
+  }, [mobileSearchOpen]);
+
   return (
-    <header className="sticky top-0 z-20 h-16 bg-white/90 backdrop-blur border-b border-slate-200 flex items-center justify-between px-3 md:px-6">
-      {/* Left */}
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onToggleMobileSidebar}
-          className="inline-flex rounded-lg border border-slate-200 p-2 text-slate-700 hover:bg-slate-100 md:hidden"
-          title="Open sidebar"
-        >
-          <Menu size={18} />
-        </button>
-        <button
-          type="button"
-          onClick={onToggleSidebar}
-          className="hidden md:inline-flex rounded-lg border border-slate-200 p-2 text-slate-700 hover:bg-slate-100"
-          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-        </button>
-        <h2 className="text-base font-semibold text-gray-800 md:text-xl">{title}</h2>
-      </div>
-
-      {/* Right */}
-      <div className="flex items-center gap-2 md:gap-4">
-        <input
-          type="text"
-          placeholder="Search documents..."
-          value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
-          className="hidden rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 lg:block"
-        />
-
-        {/* Bell icon */}
-        <button
-          ref={bellRef}
-          className="relative p-2 rounded-full hover:bg-gray-100"
-          onClick={() => setPanelOpen((prev) => !prev)}
-          title="Notifications"
-        >
-          <Bell size={20} className="text-gray-600" />
-          {unreadCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />}
-        </button>
-        {panelOpen && (
-          <div
-            ref={panelRef}
-            className="fixed left-3 right-3 top-20 z-30 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl md:absolute md:left-auto md:right-14 md:top-14 md:w-[24rem] md:max-w-[90vw]"
+    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 px-3 py-3 backdrop-blur md:h-16 md:px-6 md:py-0">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={onToggleMobileSidebar}
+            className="inline-flex rounded-lg border border-slate-200 p-2 text-slate-700 hover:bg-slate-100 md:hidden"
+            title="Open sidebar"
           >
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <p className="text-sm font-semibold text-slate-900">Notifications</p>
-              <div className="flex items-center gap-2 md:gap-3">
-                <span className="text-xs text-gray-500">
-                  {feedStatus === "live" ? "Live" : feedStatus === "polling" ? "Polling" : "Idle"}
-                </span>
-                <button
-                  type="button"
-                  disabled={markingRead || unreadCount === 0}
-                  onClick={markAllAsRead}
-                  className="text-right text-xs text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
-                >
-                  {markingRead ? "Marking..." : "Mark all as read"}
-                </button>
+            <Menu size={18} />
+          </button>
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="hidden rounded-lg border border-slate-200 p-2 text-slate-700 hover:bg-slate-100 md:inline-flex"
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
+          <h2 className="truncate text-base font-semibold text-gray-800 md:text-xl">{title}</h2>
+        </div>
+
+        <div className="flex items-center gap-2 md:gap-4">
+          <input
+            type="text"
+            placeholder="Search documents..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="hidden rounded-md border px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 lg:block"
+          />
+
+          <button
+            type="button"
+            onClick={() => setMobileSearchOpen((prev) => !prev)}
+            className="inline-flex rounded-full p-2 text-slate-700 hover:bg-gray-100 lg:hidden"
+            title={mobileSearchOpen ? "Close search" : "Open search"}
+            aria-label={mobileSearchOpen ? "Close search" : "Open search"}
+          >
+            {mobileSearchOpen ? <X size={18} /> : <Search size={18} />}
+          </button>
+
+          <button
+            ref={bellRef}
+            className="relative rounded-full p-2 hover:bg-gray-100"
+            onClick={() => setPanelOpen((prev) => !prev)}
+            title="Notifications"
+          >
+            <Bell size={20} className="text-gray-600" />
+            {unreadCount > 0 && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-red-500" />}
+          </button>
+          {panelOpen && (
+            <div
+              ref={panelRef}
+              className="fixed left-3 right-3 top-20 z-30 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl md:absolute md:left-auto md:right-14 md:top-14 md:w-[24rem] md:max-w-[90vw]"
+            >
+              <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                <p className="text-sm font-semibold text-slate-900">Notifications</p>
+                <div className="flex items-center gap-2 md:gap-3">
+                  <span className="text-xs text-gray-500">
+                    {feedStatus === "live" ? "Live" : feedStatus === "polling" ? "Polling" : "Idle"}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={markingRead || unreadCount === 0}
+                    onClick={markAllAsRead}
+                    className="text-right text-xs text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
+                  >
+                    {markingRead ? "Marking..." : "Mark all as read"}
+                  </button>
+                </div>
+              </div>
+              <div className="max-h-[70vh] overflow-y-auto md:max-h-80">
+                {notifications.length === 0 ? (
+                  <p className="px-4 py-4 text-sm text-gray-500">No notifications yet.</p>
+                ) : (
+                  notifications.map((item) => (
+                    <div key={item.id} className="border-b border-slate-100 px-4 py-3 last:border-b-0">
+                      <p className="text-sm text-slate-800">{item.message}</p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {item.action === "download" ? "Download" : "Preview"} - {formatDateTime(item.created_at)}
+                      </p>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
-            <div className="max-h-[70vh] overflow-y-auto md:max-h-80">
-              {notifications.length === 0 ? (
-                <p className="px-4 py-4 text-sm text-gray-500">No notifications yet.</p>
-              ) : (
-                notifications.map((item) => (
-                  <div key={item.id} className="border-b border-slate-100 px-4 py-3 last:border-b-0">
-                    <p className="text-sm text-slate-800">{item.message}</p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {item.action === "download" ? "Download" : "Preview"} • {formatDateTime(item.created_at)}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
+          )}
 
-        {/* User avatar */}
-        <UserDropdown />
+          <UserDropdown />
+        </div>
       </div>
+
+      {mobileSearchOpen && (
+        <div className="mt-3 lg:hidden">
+          <div className="relative">
+            <Search
+              size={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              ref={mobileSearchInputRef}
+              type="text"
+              placeholder="Search documents..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-10 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => onSearchChange("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                aria-label="Clear search"
+                title="Clear search"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 }
