@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { Activity as ActivityIcon, Link2, ShieldCheck } from "lucide-react";
+import { Activity as ActivityIcon, Link2, MoreVertical, ShieldCheck } from "lucide-react";
 import { apiFetch } from "../utils/api";
 import { useOutletContext } from "react-router-dom";
 
@@ -54,31 +54,79 @@ function parseViewerLabel(label) {
   return { id: raw, detail: "", full: raw };
 }
 
+function ShareActionMenu({ row, openMenuId, setOpenMenuId, revokingShareId, onRevoke, align = "right" }) {
+  if (row.status !== "active") return null;
+
+  const menuPositionClass = align === "left" ? "left-0" : "right-0";
+
+  return (
+    <div className="relative inline-flex" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpenMenuId(openMenuId === row.share_id ? null : row.share_id);
+        }}
+        aria-label="Open share actions"
+        title="Share actions"
+      >
+        <MoreVertical size={16} />
+      </button>
+      {openMenuId === row.share_id && (
+        <div className={`absolute top-full z-20 mt-2 w-36 rounded-md border border-slate-200 bg-white py-1 shadow-lg ${menuPositionClass}`}>
+          <button
+            type="button"
+            onClick={() => onRevoke(row.share_id)}
+            disabled={revokingShareId === row.share_id}
+            className="block w-full px-4 py-2 text-left text-sm text-red-700 hover:bg-red-50 disabled:text-slate-400 disabled:hover:bg-transparent"
+          >
+            {revokingShareId === row.share_id ? "Revoking..." : "Revoke access"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Activity() {
   const { searchQuery = "" } = useOutletContext() || {};
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedShareId, setExpandedShareId] = useState(null);
+  const [revokingShareId, setRevokingShareId] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
+
+  const loadLogs = async (active = true) => {
+    try {
+      setLoading(true);
+      const res = await apiFetch("/activity/logs");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to load activity logs");
+      if (active) {
+        setLogs(Array.isArray(data) ? data : []);
+        setError("");
+      }
+    } catch (err) {
+      if (active) setError(err.message || "Failed to load activity logs");
+    } finally {
+      if (active) setLoading(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
-    (async () => {
-      try {
-        setLoading(true);
-        const res = await apiFetch("/activity/logs");
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || "Failed to load activity logs");
-        if (active) setLogs(Array.isArray(data) ? data : []);
-      } catch (err) {
-        if (active) setError(err.message || "Failed to load activity logs");
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
+    loadLogs(active);
     return () => {
       active = false;
     };
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = () => setOpenMenuId(null);
+    window.addEventListener("click", handleClickOutside);
+    return () => window.removeEventListener("click", handleClickOutside);
   }, []);
 
   const filteredLogs = useMemo(() => {
@@ -99,6 +147,32 @@ function Activity() {
     const activeLinks = filteredLogs.filter((row) => row.status === "active").length;
     return { totalAccess, activeLinks };
   }, [filteredLogs]);
+
+  const revokeShare = async (shareId) => {
+    try {
+      setRevokingShareId(shareId);
+      const res = await apiFetch(`/share/${shareId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || "Failed to revoke share");
+      }
+      setOpenMenuId(null);
+      setLogs((prev) =>
+        prev.map((row) =>
+          row.share_id === shareId
+            ? {
+                ...row,
+                status: "revoked",
+              }
+            : row
+        )
+      );
+    } catch (err) {
+      setError(err.message || "Failed to revoke share");
+    } finally {
+      setRevokingShareId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -143,7 +217,131 @@ function Activity() {
           ) : filteredLogs.length === 0 ? (
             <p className="px-6 py-6 text-sm text-gray-500">No activity found yet.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+              <div className="divide-y divide-slate-100 md:hidden">
+                {filteredLogs.map((row) => {
+                  const parsed = parseViewerLabel(row.accessed_by);
+                  const hoverText = parsed.detail ? `${parsed.id} | ${parsed.detail}` : parsed.full;
+                  const isExpanded = expandedShareId === row.share_id;
+
+                  return (
+                    <article key={row.share_id} className="px-4 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-semibold text-slate-900" title={row.name}>
+                            {row.name}
+                          </p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs ${statusStyle(row.status)}`}>
+                              {statusLabel(row.status)}
+                            </span>
+                            <button
+                              type="button"
+                              className="text-left text-xs text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
+                              disabled={!row.viewer_entries?.length}
+                              onClick={() => setExpandedShareId(isExpanded ? null : row.share_id)}
+                              title={hoverText}
+                            >
+                              {parsed.id}
+                            </button>
+                          </div>
+                        </div>
+                        <ShareActionMenu
+                          row={row}
+                          openMenuId={openMenuId}
+                          setOpenMenuId={setOpenMenuId}
+                          revokingShareId={revokingShareId}
+                          onRevoke={revokeShare}
+                          align="right"
+                        />
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                        <div className="rounded-lg bg-slate-50 p-3">
+                          <p className="text-xs uppercase tracking-wide text-gray-500">Unique viewers</p>
+                          <p className="mt-1 font-medium text-slate-900">{row.unique_viewer_count || 0}</p>
+                        </div>
+                        <div className="rounded-lg bg-slate-50 p-3">
+                          <p className="text-xs uppercase tracking-wide text-gray-500">No. of access</p>
+                          <p className="mt-1 font-medium text-slate-900">{row.number_of_time_accessed || 0}</p>
+                        </div>
+                        <div className="rounded-lg bg-slate-50 p-3">
+                          <p className="text-xs uppercase tracking-wide text-gray-500">Downloads</p>
+                          <p className="mt-1 font-medium text-slate-900">{row.download_count || 0}</p>
+                        </div>
+                        <div className="rounded-lg bg-slate-50 p-3">
+                          <p className="text-xs uppercase tracking-wide text-gray-500">Downloaded?</p>
+                          <span
+                            className={`mt-1 inline-flex rounded-full px-2 py-1 text-xs ${
+                              row.is_downloaded ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {row.is_downloaded ? "Yes" : "No"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">
+                        <p className="text-xs uppercase tracking-wide text-gray-500">Latest access time (IST)</p>
+                        <button
+                          type="button"
+                          className="mt-1 text-left text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
+                          disabled={!row.latest_time_accessed}
+                          onClick={() => setExpandedShareId(isExpanded ? null : row.share_id)}
+                        >
+                          {formatDateTime(row.latest_time_accessed)}
+                        </button>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="mt-4 grid gap-4">
+                          <div className="rounded-md border border-slate-200 bg-white p-3">
+                            <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">Unique viewers</p>
+                            {row.viewer_entries?.length ? (
+                              <ul className="space-y-1 text-sm text-gray-700">
+                                {row.viewer_entries.map((viewer, idx) => {
+                                  const viewerParsed = parseViewerLabel(viewer.viewer_label);
+                                  const viewerHover = viewerParsed.detail
+                                    ? `${viewerParsed.id} | ${viewerParsed.detail}`
+                                    : viewerParsed.full;
+                                  return (
+                                    <li key={`${row.share_id}-viewer-mobile-${idx}`} title={viewerHover}>
+                                      {viewerParsed.id} - {formatDateTime(viewer.latest_time_accessed)} ({viewer.access_count})
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            ) : (
+                              <p className="text-sm text-gray-500">No access yet.</p>
+                            )}
+                          </div>
+
+                          <div className="rounded-md border border-slate-200 bg-white p-3">
+                            <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">All access events</p>
+                            {row.all_access_entries?.length ? (
+                              <ul className="space-y-1 text-sm text-gray-700">
+                                {row.all_access_entries.map((entry, idx) => {
+                                  const entryViewer = parseViewerLabel(entry.viewer_label);
+                                  const actionLabel = entry.action === "download" ? "download" : "preview";
+                                  return (
+                                    <li key={`${row.share_id}-entry-mobile-${idx}`}>
+                                      {entryViewer.id} - {formatDateTime(entry.time_accessed)} ({actionLabel})
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            ) : (
+                              <p className="text-sm text-gray-500">No access yet.</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+
+              <div className="hidden overflow-x-auto md:block">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-gray-500">
@@ -155,6 +353,7 @@ function Activity() {
                     <th className="px-6 py-3">Downloaded?</th>
                     <th className="px-6 py-3">Latest Access Time (IST)</th>
                     <th className="px-6 py-3">Status</th>
+                    <th className="px-6 py-3 text-right"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -205,11 +404,21 @@ function Activity() {
                               {statusLabel(row.status)}
                             </span>
                           </td>
+                          <td className="px-6 py-3 text-right">
+                            <ShareActionMenu
+                              row={row}
+                              openMenuId={openMenuId}
+                              setOpenMenuId={setOpenMenuId}
+                              revokingShareId={revokingShareId}
+                              onRevoke={revokeShare}
+                              align="right"
+                            />
+                          </td>
                         </tr>
 
                         {isExpanded && (
                           <tr className="border-b border-slate-100 bg-slate-50/70">
-                            <td colSpan={8} className="px-6 py-4">
+                            <td colSpan={9} className="px-6 py-4">
                               <div className="grid gap-4 md:grid-cols-2">
                                 <div className="rounded-md border border-slate-200 bg-white p-3">
                                   <p className="mb-2 text-xs uppercase tracking-wide text-gray-500">Unique viewers</p>
@@ -259,7 +468,8 @@ function Activity() {
                   })}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </>
           )}
         </section>
       )}

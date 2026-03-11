@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { setSession } from "../utils/session";
+import { setSession, setUser } from "../utils/session";
 import { deriveMasterKey } from "../utils/crypto";
 import { setMasterKey } from "../utils/keyStore";
 import { apiFetch } from "../utils/api";
@@ -73,14 +73,14 @@ function Login() {
             const data = await res.json();
 
             if (res.ok) {
-                 // ✅ 1. Store full user info for UI + refresh persistence
-                sessionStorage.setItem("user", JSON.stringify({
+                setUser({
                   user_id: data.user_id,
                   username: data.username,
                   email: data.email,
-                }));
+                  last_login: data.last_login,
+                  total_documents: 0,
+                });
 
-                // ✅ 2. Keep your encryption session logic (DO NOT REMOVE)
                 setSession({
                   user_id: data.user_id,
                   salt: data.salt,
@@ -91,7 +91,6 @@ function Login() {
               const masterKey = await deriveMasterKey(password, data.salt);
               setMasterKey(masterKey);
 
-                // ✅ 3. Navigate
                 navigate("/app");
             }else {
               alert(data.detail || "Login failed");

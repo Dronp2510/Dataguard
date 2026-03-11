@@ -29,7 +29,23 @@ function clearLegacyLocalStorageKeys() {
   localStorage.removeItem("dg_user_id");
   localStorage.removeItem("dg_salt");
   localStorage.removeItem("dg_access_token");
+  localStorage.removeItem("dg_session_expires_at");
   localStorage.removeItem("user");
+}
+
+export function setUser(user) {
+  const serialized = JSON.stringify(user || {});
+  sessionStorage.setItem("user", serialized);
+  localStorage.setItem("user", serialized);
+  notifyAuthChanged();
+}
+
+export function getUser() {
+  try {
+    return JSON.parse(sessionStorage.getItem("user") || localStorage.getItem("user") || "{}");
+  } catch {
+    return {};
+  }
 }
 
 export function setSession({ user_id, salt, token, expires_at }) {

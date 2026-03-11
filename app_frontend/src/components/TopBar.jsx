@@ -35,6 +35,8 @@ function TopBar({
     ? "Vaults"
     : location.pathname.includes("/activity")
     ? "My Activity"
+    : location.pathname.includes("/profile")
+    ? "My Profile"
     : location.pathname.includes("/settings")
     ? "Settings"
     : "Dashboard";
@@ -225,11 +227,11 @@ function TopBar({
         {panelOpen && (
           <div
             ref={panelRef}
-            className="absolute right-14 top-14 z-30 w-[24rem] max-w-[90vw] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl"
+            className="fixed left-3 right-3 top-20 z-30 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl md:absolute md:left-auto md:right-14 md:top-14 md:w-[24rem] md:max-w-[90vw]"
           >
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
               <p className="text-sm font-semibold text-slate-900">Notifications</p>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 md:gap-3">
                 <span className="text-xs text-gray-500">
                   {feedStatus === "live" ? "Live" : feedStatus === "polling" ? "Polling" : "Idle"}
                 </span>
@@ -237,13 +239,13 @@ function TopBar({
                   type="button"
                   disabled={markingRead || unreadCount === 0}
                   onClick={markAllAsRead}
-                  className="text-xs text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
+                  className="text-right text-xs text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
                 >
                   {markingRead ? "Marking..." : "Mark all as read"}
                 </button>
               </div>
             </div>
-            <div className="max-h-80 overflow-y-auto">
+            <div className="max-h-[70vh] overflow-y-auto md:max-h-80">
               {notifications.length === 0 ? (
                 <p className="px-4 py-4 text-sm text-gray-500">No notifications yet.</p>
               ) : (

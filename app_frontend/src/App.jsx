@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ShareAccess from "./pages/ShareAccess";
 import Landing from "./pages/Landing";
+import Profile from "./pages/Profile";
 
 function App() {
   const [ready, setReady] = useState(false);
@@ -57,6 +58,7 @@ function App() {
           <Route index element={<Home />} />
           <Route path="vaults" element={<Vaults />} />
           <Route path="activity" element={<Activity />} />
+          <Route path="profile" element={<Profile />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
