@@ -193,8 +193,8 @@ function TopBar({
   }, [mobileSearchOpen]);
 
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 px-3 py-3 backdrop-blur md:h-16 md:px-6 md:py-0">
-      <div className="flex items-center justify-between gap-3">
+    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 px-3 py-3 backdrop-blur md:rounded-xl md:h-16 md:px-6 md:py-0">
+      <div className="flex items-center justify-between gap-3 md:h-full">
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"

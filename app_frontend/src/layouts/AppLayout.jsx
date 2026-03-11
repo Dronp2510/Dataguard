@@ -35,13 +35,15 @@ function AppLayout() {
           sidebarCollapsed ? "md:ml-20" : "md:ml-64"
         }`}
       >
-        <TopBar
-          sidebarCollapsed={sidebarCollapsed}
-          onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
-          onToggleMobileSidebar={() => setMobileSidebarOpen((prev) => !prev)}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-        />
+        <div className="md:px-4 md:pt-4">
+          <TopBar
+            sidebarCollapsed={sidebarCollapsed}
+            onToggleSidebar={() => setSidebarCollapsed((prev) => !prev)}
+            onToggleMobileSidebar={() => setMobileSidebarOpen((prev) => !prev)}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+          />
+        </div>
 
         <main className="p-4 md:p-8">
           <Outlet context={{ searchQuery }} />
