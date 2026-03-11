@@ -54,10 +54,19 @@ function parseViewerLabel(label) {
   return { id: raw, detail: "", full: raw };
 }
 
-function ShareActionMenu({ row, openMenuId, setOpenMenuId, revokingShareId, onRevoke, align = "right" }) {
+function ShareActionMenu({
+  row,
+  openMenuId,
+  setOpenMenuId,
+  revokingShareId,
+  onRevoke,
+  align = "right",
+  direction = "down",
+}) {
   if (row.status !== "active") return null;
 
   const menuPositionClass = align === "left" ? "left-0" : "right-0";
+  const menuDirectionClass = direction === "up" ? "bottom-full mb-2" : "top-full mt-2";
 
   return (
     <div className="relative inline-flex" onClick={(e) => e.stopPropagation()}>
@@ -74,7 +83,9 @@ function ShareActionMenu({ row, openMenuId, setOpenMenuId, revokingShareId, onRe
         <MoreVertical size={16} />
       </button>
       {openMenuId === row.share_id && (
-        <div className={`absolute top-full z-20 mt-2 w-36 rounded-md border border-slate-200 bg-white py-1 shadow-lg ${menuPositionClass}`}>
+        <div
+          className={`absolute z-20 w-36 rounded-md border border-slate-200 bg-white py-1 shadow-lg ${menuPositionClass} ${menuDirectionClass}`}
+        >
           <button
             type="button"
             onClick={() => onRevoke(row.share_id)}
@@ -409,12 +420,13 @@ function Activity() {
                               row={row}
                               openMenuId={openMenuId}
                               setOpenMenuId={setOpenMenuId}
-                              revokingShareId={revokingShareId}
-                              onRevoke={revokeShare}
-                              align="right"
-                            />
-                          </td>
-                        </tr>
+                            revokingShareId={revokingShareId}
+                            onRevoke={revokeShare}
+                            align="right"
+                            direction="up"
+                          />
+                        </td>
+                      </tr>
 
                         {isExpanded && (
                           <tr className="border-b border-slate-100 bg-slate-50/70">

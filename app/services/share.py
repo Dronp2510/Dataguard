@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException, Request
 
 from ..models import AuthSession, DeviceIdentity, Share, ShareAccessLog, User
-from ..utils import ensure_not_expired, hash_token
+from ..utils import as_ist, ensure_not_expired, hash_token
 from .auth import bind_guest_identity_to_user, normalize_guest_id, user_watermark_label
 
 
@@ -93,8 +93,7 @@ def build_notification_payload(log: ShareAccessLog, share: Share, filename: str)
     viewer = log.viewer_label or "Unknown viewer"
     action_label = "downloaded" if action == "download" else "accessed"
     created_at = log.created_at
-    if created_at and created_at.tzinfo is None:
-        created_at = created_at.replace(tzinfo=timezone.utc)
+    created_at = as_ist(created_at)
     return {
         "id": log.id,
         "share_id": share.id,

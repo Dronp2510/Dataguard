@@ -9,7 +9,7 @@ from ..core.rate_limit import client_identity, enforce_rate_limit
 from ..database import SessionLocal
 from ..models import AuthSession, File as VaultFile, User, VaultItem
 from ..services.auth import bind_guest_identity_to_user, get_bearer_token, get_current_user
-from ..utils import generate_token, hash_token, new_session_expiry
+from ..utils import convert_datetimes_to_ist, generate_token, hash_token, new_session_expiry
 
 router = APIRouter()
 
@@ -69,7 +69,7 @@ def login(
         bind_guest_identity_to_user(db, x_guest_id, user)
         db.commit()
 
-        return {
+        return convert_datetimes_to_ist({
             "message": "Login success",
             "user_id": user.id,
             "username": user.username,
@@ -78,7 +78,7 @@ def login(
             "last_login": user.last_login,
             "expires_at": session.expires_at,
             "access_token": raw_token,
-        }
+        })
     finally:
         db.close()
 
@@ -109,13 +109,13 @@ def current_profile(current_user: User = Depends(get_current_user)):
             .filter(VaultItem.owner_id == user.id)
             .count()
         )
-        return {
+        return convert_datetimes_to_ist({
             "user_id": user.id,
             "username": user.username,
             "email": user.email,
             "last_login": user.last_login,
             "created_at": user.created_at,
             "total_documents": total_documents,
-        }
+        })
     finally:
         db.close()

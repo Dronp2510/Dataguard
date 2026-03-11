@@ -10,7 +10,7 @@ from ..models import EncryptedKey, File as VaultFile, Folder, User, VaultItem, V
 from ..schemas import VaultItemResponse
 from ..services.auth import get_current_user
 from ..services.vault import delete_vault_item_tree, ensure_item_owner
-from ..utils import STORAGE_PATH
+from ..utils import STORAGE_PATH, convert_datetimes_to_ist
 
 router = APIRouter()
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
@@ -217,7 +217,7 @@ def list_vault_items(parent_id: str | None = None, current_user: User = Depends(
                 }
             )
 
-        return result
+        return convert_datetimes_to_ist(result)
     finally:
         db.close()
 
@@ -251,7 +251,7 @@ def recent_items(limit: int = 3, current_user: User = Depends(get_current_user))
                     "parent_id": item.parent_id,
                 }
             )
-        return result
+        return convert_datetimes_to_ist(result)
     finally:
         db.close()
 

@@ -9,6 +9,7 @@ from ..database import SessionLocal
 from ..models import File as VaultFile, Share, ShareAccessLog, User
 from ..services.auth import get_current_user, resolve_user_from_access_token
 from ..services.share import build_notification_payload
+from ..utils import convert_datetimes_to_ist
 
 router = APIRouter()
 
@@ -55,7 +56,7 @@ def list_notifications(
         if seen_at is not None:
             unread_query = unread_query.filter(ShareAccessLog.created_at > seen_at)
         unread_count = unread_query.count()
-        return {"items": items, "unread_count": unread_count, "seen_at": seen_at}
+        return convert_datetimes_to_ist({"items": items, "unread_count": unread_count, "seen_at": seen_at})
     finally:
         db.close()
 
@@ -69,7 +70,7 @@ def mark_all_notifications_read(current_user: User = Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="User not found")
         user.notifications_seen_at = datetime.now(timezone.utc)
         db.commit()
-        return {"message": "Notifications marked as read", "seen_at": user.notifications_seen_at}
+        return convert_datetimes_to_ist({"message": "Notifications marked as read", "seen_at": user.notifications_seen_at})
     finally:
         db.close()
 
@@ -112,7 +113,7 @@ async def notification_stream(access_token: str = Query(...)):
                                 filename = file_row.filename if file_row else "Unknown File"
                                 file_cache[share.vault_item_id] = filename
 
-                            payload = build_notification_payload(log, share, filename)
+                            payload = convert_datetimes_to_ist(build_notification_payload(log, share, filename))
                             yield f"event: notification\ndata: {json.dumps(payload, default=str)}\n\n"
                             created = log.created_at
                             if created:

@@ -9,7 +9,7 @@ from ..models import File as VaultFile, Share, ShareAccessLog, User, VaultItemTy
 from ..services.auth import get_current_user
 from ..services.share import create_share_access_log, get_share_or_410, resolve_viewer_identity
 from ..services.vault import ensure_item_owner
-from ..utils import generate_token
+from ..utils import convert_datetimes_to_ist, generate_token
 
 router = APIRouter()
 
@@ -61,13 +61,13 @@ def create_share_link(
         db.add(share)
         db.commit()
 
-        return {
+        return convert_datetimes_to_ist({
             "share_id": share.id,
             "share_url": f"/share/{token}",
             "expires_at": share.expiry_time,
             "expiry_option": expiry_option,
             "max_views": share.max_views,
-        }
+        })
     finally:
         db.close()
 
@@ -77,7 +77,7 @@ def list_my_shares(current_user: User = Depends(get_current_user)):
     db = SessionLocal()
     try:
         rows = db.query(Share).filter(Share.owner_id == current_user.id).order_by(Share.created_at.desc()).all()
-        return [
+        return convert_datetimes_to_ist([
             {
                 "id": s.id,
                 "file_id": s.vault_item_id,
@@ -89,7 +89,7 @@ def list_my_shares(current_user: User = Depends(get_current_user)):
                 "created_at": s.created_at,
             }
             for s in rows
-        ]
+        ])
     finally:
         db.close()
 
@@ -128,7 +128,7 @@ def share_metadata(
         create_share_access_log(db, share.id, "metadata", viewer_type, viewer_label, request)
         db.commit()
 
-        return {
+        return convert_datetimes_to_ist({
             "metadata": {
                 "filename": file.filename,
                 "mime_type": file.mime_type,
@@ -147,7 +147,7 @@ def share_metadata(
             "expires_at": share.expiry_time,
             "is_forever": share.expiry_time.year >= 9999,
             "watermark_text": viewer_label,
-        }
+        })
     finally:
         db.close()
 
@@ -194,7 +194,7 @@ def share_logs(share_id: str, current_user: User = Depends(get_current_user)):
         if share.owner_id != current_user.id:
             raise HTTPException(status_code=403, detail="Forbidden")
         logs = db.query(ShareAccessLog).filter(ShareAccessLog.share_id == share_id).order_by(ShareAccessLog.created_at.desc()).all()
-        return [
+        return convert_datetimes_to_ist([
             {
                 "id": log.id,
                 "action": log.action,
@@ -205,7 +205,7 @@ def share_logs(share_id: str, current_user: User = Depends(get_current_user)):
                 "created_at": log.created_at,
             }
             for log in logs
-        ]
+        ])
     finally:
         db.close()
 
@@ -294,6 +294,6 @@ def activity_logs(current_user: User = Depends(get_current_user)):
                 }
             )
 
-        return result
+        return convert_datetimes_to_ist(result)
     finally:
         db.close()

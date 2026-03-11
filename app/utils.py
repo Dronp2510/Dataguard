@@ -11,6 +11,7 @@ STORAGE_PATH = Path(storage_root) if storage_root else (BASE_DIR / "secure_stora
 STORAGE_PATH.mkdir(exist_ok=True)
 
 TOKEN_TTL_HOURS = 12
+IST = timezone(timedelta(hours=5, minutes=30))
 
 
 def generate_token():
@@ -23,6 +24,28 @@ def hash_token(token: str) -> str:
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def as_ist(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(IST)
+
+
+def convert_datetimes_to_ist(value):
+    if isinstance(value, datetime):
+        return as_ist(value)
+    if isinstance(value, dict):
+        return {key: convert_datetimes_to_ist(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [convert_datetimes_to_ist(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(convert_datetimes_to_ist(item) for item in value)
+    if isinstance(value, set):
+        return [convert_datetimes_to_ist(item) for item in value]
+    return value
 
 
 def new_session_expiry() -> datetime:
