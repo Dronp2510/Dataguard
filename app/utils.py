@@ -10,6 +10,8 @@ storage_root = os.getenv("STORAGE_PATH")
 STORAGE_PATH = Path(storage_root) if storage_root else (BASE_DIR / "secure_storage")
 STORAGE_PATH.mkdir(exist_ok=True)
 
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str((3 * 1024 * 1024 * 1024) // 2)))
+MAX_USER_STORAGE_BYTES = int(os.getenv("MAX_USER_STORAGE_BYTES", str(15 * 1024 * 1024 * 1024)))
 TOKEN_TTL_HOURS = 12
 IST = timezone(timedelta(hours=5, minutes=30))
 

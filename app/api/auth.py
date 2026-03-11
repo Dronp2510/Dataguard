@@ -9,6 +9,7 @@ from ..core.rate_limit import client_identity, enforce_rate_limit
 from ..database import SessionLocal
 from ..models import AuthSession, File as VaultFile, User, VaultItem
 from ..services.auth import bind_guest_identity_to_user, get_bearer_token, get_current_user
+from ..services.vault import get_storage_summary
 from ..utils import convert_datetimes_to_ist, generate_token, hash_token, new_session_expiry
 
 router = APIRouter()
@@ -116,6 +117,7 @@ def current_profile(current_user: User = Depends(get_current_user)):
             "last_login": user.last_login,
             "created_at": user.created_at,
             "total_documents": total_documents,
+            **get_storage_summary(db, user.id),
         })
     finally:
         db.close()

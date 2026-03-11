@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { CalendarDays, FileText, Mail, ShieldCheck, User as UserIcon } from "lucide-react";
 import { apiFetch } from "../utils/api";
 import { getUser, setUser } from "../utils/session";
+import { formatBytes } from "../utils/storage";
 
 function formatDateTime(value) {
   if (!value) return "Not available";
@@ -34,6 +35,9 @@ function Profile() {
           created_at: data.created_at,
           last_login: data.last_login,
           total_documents: data.total_documents ?? 0,
+          used_storage_bytes: data.used_storage_bytes ?? 0,
+          storage_quota_bytes: data.storage_quota_bytes ?? 0,
+          remaining_storage_bytes: data.remaining_storage_bytes ?? 0,
         };
         setProfile(nextProfile);
         setUser(nextProfile);
@@ -71,8 +75,10 @@ function Profile() {
           <p className="text-2xl font-bold text-slate-900">{profile.total_documents ?? 0}</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm text-gray-500">Last login</p>
-          <p className="text-base font-semibold text-slate-900">{formatDateTime(profile.last_login)}</p>
+          <p className="text-sm text-gray-500">Storage used</p>
+          <p className="text-base font-semibold text-slate-900">
+            {formatBytes(profile.used_storage_bytes ?? 0)} / {formatBytes(profile.storage_quota_bytes ?? 0)}
+          </p>
         </div>
       </section>
 
@@ -111,6 +117,14 @@ function Profile() {
                 <div className="flex items-center gap-3">
                   <FileText size={15} className="text-slate-500" />
                   <span>Encrypted files stored: {profile.total_documents ?? 0}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <ShieldCheck size={15} className="text-slate-500" />
+                  <span>Remaining storage: {formatBytes(profile.remaining_storage_bytes ?? 0)}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <CalendarDays size={15} className="text-slate-500" />
+                  <span>Last login: {formatDateTime(profile.last_login)}</span>
                 </div>
               </div>
             </div>

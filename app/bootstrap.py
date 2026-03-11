@@ -13,6 +13,7 @@ def ensure_sqlite_column(table: str, column: str, ddl_type: str) -> None:
 
 def initialize_database() -> None:
     Base.metadata.create_all(bind=engine)
+    ensure_sqlite_column("files", "stored_size", "INTEGER")
     ensure_sqlite_column("files", "is_compressed", "BOOLEAN DEFAULT 0")
     ensure_sqlite_column("files", "compression_algo", "VARCHAR")
     ensure_sqlite_column("files", "original_filename", "VARCHAR")

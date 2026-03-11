@@ -34,6 +34,7 @@ class File(Base):
     filename = Column(String, nullable=False)
     mime_type = Column(String, nullable=False)
     storage_path = Column(String, nullable=False)
+    stored_size = Column(Integer, nullable=True)
     iv = Column(String, nullable=False)
     is_compressed = Column(Boolean, nullable=False, default=False)
     compression_algo = Column(String, nullable=True)

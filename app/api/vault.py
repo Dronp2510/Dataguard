@@ -1,4 +1,3 @@
-import os
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -9,11 +8,10 @@ from ..database import SessionLocal
 from ..models import EncryptedKey, File as VaultFile, Folder, User, VaultItem, VaultItemType
 from ..schemas import VaultItemResponse
 from ..services.auth import get_current_user
-from ..services.vault import delete_vault_item_tree, ensure_item_owner
-from ..utils import STORAGE_PATH, convert_datetimes_to_ist
+from ..services.vault import delete_vault_item_tree, ensure_item_owner, get_storage_summary
+from ..utils import MAX_UPLOAD_BYTES, STORAGE_PATH, convert_datetimes_to_ist
 
 router = APIRouter()
-MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
 
 
 @router.post("/vault/files")
@@ -36,6 +34,9 @@ async def upload_encrypted_file(
     db = SessionLocal()
     try:
         enforce_rate_limit("upload", f"{current_user.id}:{client_identity(request)}", 20, 60)
+        storage_summary = get_storage_summary(db, current_user.id)
+        if storage_summary["remaining_storage_bytes"] <= 0:
+            raise HTTPException(status_code=413, detail="Storage limit reached for this account")
 
         if parent_folder_id:
             parent = ensure_item_owner(db, parent_folder_id, current_user.id)
@@ -69,6 +70,10 @@ async def upload_encrypted_file(
                 file_path.unlink(missing_ok=True)
             raise
 
+        if size_read > storage_summary["remaining_storage_bytes"]:
+            file_path.unlink(missing_ok=True)
+            raise HTTPException(status_code=413, detail="Storage quota exceeded for this account")
+
         vault_item = VaultItem(type=VaultItemType.file, parent_id=parent_folder_id, owner_id=current_user.id)
         db.add(vault_item)
         db.flush()
@@ -78,6 +83,7 @@ async def upload_encrypted_file(
             filename=filename,
             mime_type=mime_type,
             storage_path=str(file_path),
+            stored_size=size_read,
             iv=iv,
             is_compressed=is_compressed,
             compression_algo=compression_algo if is_compressed else None,
@@ -96,7 +102,10 @@ async def upload_encrypted_file(
         db.add(key)
 
         db.commit()
-        return {"file_id": vault_item.id}
+        return {
+            "file_id": vault_item.id,
+            **get_storage_summary(db, current_user.id),
+        }
     finally:
         db.close()
 
@@ -252,6 +261,15 @@ def recent_items(limit: int = 3, current_user: User = Depends(get_current_user))
                 }
             )
         return convert_datetimes_to_ist(result)
+    finally:
+        db.close()
+
+
+@router.get("/vault/storage")
+def storage_summary(current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        return get_storage_summary(db, current_user.id)
     finally:
         db.close()
 

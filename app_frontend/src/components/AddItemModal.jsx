@@ -3,6 +3,12 @@ import { useEffect, useMemo, useState } from "react";
 import { getMasterKey } from "../utils/keyStore";
 import { encryptFile, encryptFileKey, generateFileKey, gzipCompressBlob, supportsCompressionStreams } from "../utils/crypto";
 import { apiFetch } from "../utils/api";
+import {
+  DEFAULT_MAX_UPLOAD_BYTES,
+  DEFAULT_STORAGE_QUOTA_BYTES,
+  estimateEncryptedSize,
+  formatBytes,
+} from "../utils/storage";
 
 const NON_COMPRESSIBLE_EXTENSIONS = new Set([
   "zip",
@@ -24,19 +30,6 @@ const NON_COMPRESSIBLE_EXTENSIONS = new Set([
   "pdf",
 ]);
 
-function formatBytes(bytes) {
-  if (!Number.isFinite(bytes) || bytes < 0) return "-";
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB"];
-  let value = bytes / 1024;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-  return `${value.toFixed(value < 10 ? 2 : 1)} ${units[unitIndex]}`;
-}
-
 function getFileExtension(filename = "") {
   const idx = filename.lastIndexOf(".");
   if (idx < 0 || idx === filename.length - 1) return "";
@@ -52,10 +45,18 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
   const [compressionError, setCompressionError] = useState("");
   const [compressedBlob, setCompressedBlob] = useState(null);
   const [uploadBusy, setUploadBusy] = useState(false);
+  const [storageSummary, setStorageSummary] = useState(null);
+  const [storageError, setStorageError] = useState("");
 
   const compressionSupported = supportsCompressionStreams();
   const extension = getFileExtension(selectedFile?.name || "");
   const likelyUnhelpfulCompression = NON_COMPRESSIBLE_EXTENSIONS.has(extension);
+  const maxUploadBytes = storageSummary?.max_upload_bytes ?? DEFAULT_MAX_UPLOAD_BYTES;
+  const storageQuotaBytes = storageSummary?.storage_quota_bytes ?? DEFAULT_STORAGE_QUOTA_BYTES;
+  const remainingStorageBytes = storageSummary?.remaining_storage_bytes ?? storageQuotaBytes;
+  const usedStorageBytes = storageSummary?.used_storage_bytes ?? 0;
+  const requiresCompression = Boolean(selectedFile) && estimateEncryptedSize(selectedFile.size) > maxUploadBytes;
+  const cannotAutoCompressPractically = requiresCompression && likelyUnhelpfulCompression;
 
   useEffect(() => {
     setCompressBeforeUpload(false);
@@ -66,8 +67,47 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
 
   useEffect(() => {
     let active = true;
+    (async () => {
+      try {
+        const res = await apiFetch("/vault/storage");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.detail || "Failed to load storage details");
+        }
+        if (!active) return;
+        setStorageSummary(data);
+        setStorageError("");
+      } catch (err) {
+        if (!active) return;
+        setStorageError(err.message || "Failed to load storage details");
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedFile) return;
+    if (cannotAutoCompressPractically) {
+      setCompressBeforeUpload(false);
+      setCompressedBlob(null);
+      setCompressionError("This file is already in a compressed media/archive format and is above the 1.5 GB upload limit. Upload is not allowed.");
+      return;
+    }
+    if (!requiresCompression) return;
+    if (!compressionSupported) {
+      setCompressionError("This file exceeds the 1.5 GB upload limit and cannot be auto-compressed in this browser.");
+      return;
+    }
+    setCompressBeforeUpload(true);
+  }, [selectedFile, requiresCompression, compressionSupported, cannotAutoCompressPractically]);
+
+  useEffect(() => {
+    let active = true;
     const runCompression = async () => {
       if (!selectedFile || !compressBeforeUpload) return;
+      if (cannotAutoCompressPractically) return;
       if (!compressionSupported) {
         setCompressionError("Compression is not supported in this browser.");
         return;
@@ -78,6 +118,9 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
         const result = await gzipCompressBlob(selectedFile);
         if (!active) return;
         setCompressedBlob(result);
+        if (estimateEncryptedSize(result.size) > maxUploadBytes) {
+          setCompressionError("Compressed file is still above the 1.5 GB upload limit.");
+        }
       } catch {
         if (!active) return;
         setCompressionError("Could not compress this file.");
@@ -91,7 +134,7 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
     return () => {
       active = false;
     };
-  }, [selectedFile, compressBeforeUpload, compressionSupported]);
+  }, [selectedFile, compressBeforeUpload, compressionSupported, maxUploadBytes, cannotAutoCompressPractically]);
 
   const compressionStats = useMemo(() => {
     if (!selectedFile || !compressedBlob) return null;
@@ -106,6 +149,25 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
       savedPercent: ratio,
     };
   }, [selectedFile, compressedBlob]);
+
+  const estimatedUploadBytes = useMemo(() => {
+    if (!selectedFile) return null;
+    if (!compressBeforeUpload) return estimateEncryptedSize(selectedFile.size);
+    if (!compressedBlob) return null;
+    return estimateEncryptedSize(compressedBlob.size);
+  }, [selectedFile, compressBeforeUpload, compressedBlob]);
+
+  const compressedStillTooLarge = Boolean(compressBeforeUpload && compressedBlob) && estimatedUploadBytes > maxUploadBytes;
+  const storageWouldOverflow = estimatedUploadBytes !== null && estimatedUploadBytes > remainingStorageBytes;
+  const uploadBlocked =
+    !selectedFile ||
+    uploadBusy ||
+    compressionBusy ||
+    (requiresCompression && !compressBeforeUpload) ||
+    cannotAutoCompressPractically ||
+    compressedStillTooLarge ||
+    storageWouldOverflow ||
+    Boolean(compressionError && requiresCompression);
 
   const handleCreateFolder = async () => {
     if (!folderName) return;
@@ -140,6 +202,14 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
         compressedSize = prepared.size;
       }
 
+      const estimatedBytes = estimateEncryptedSize(sourceBlob.size);
+      if (estimatedBytes > maxUploadBytes) {
+        throw new Error("This file is above the 1.5 GB upload limit.");
+      }
+      if (estimatedBytes > remainingStorageBytes) {
+        throw new Error("Not enough storage remaining in this account for this upload.");
+      }
+
       const fileKey = await generateFileKey();
       const { encryptedBuffer, iv } = await encryptFile(sourceBlob, fileKey);
       const { encryptedKey, keyIv } = await encryptFileKey(fileKey, masterKey);
@@ -159,10 +229,14 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
       if (parentFolderId) formData.append("parent_folder_id", parentFolderId);
 
       const res = await apiFetch("/vault/files", { method: "POST", body: formData });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || "Upload failed");
+        throw new Error(data.detail || "Upload failed");
       }
+      setStorageSummary((prev) => ({
+        ...(prev || {}),
+        ...data,
+      }));
       onSuccess?.();
     } catch (err) {
       alert(err.message || "Upload failed");
@@ -214,12 +288,41 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
 
         {mode === "direct-file" && (
           <div className="space-y-4">
+            <div className="rounded-md border bg-slate-50 p-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-medium text-slate-800">Storage usage</span>
+                <span className="text-slate-600">
+                  {formatBytes(usedStorageBytes)} / {formatBytes(storageQuotaBytes)}
+                </span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full rounded-full bg-slate-900 transition-all"
+                  style={{ width: `${Math.min(100, storageQuotaBytes ? (usedStorageBytes / storageQuotaBytes) * 100 : 0)}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-slate-600">
+                Remaining: {formatBytes(remainingStorageBytes)}. Per-file limit: {formatBytes(maxUploadBytes)}.
+              </p>
+              {storageError && <p className="mt-2 text-xs text-red-600">{storageError}</p>}
+            </div>
+
             <input type="file" className="w-full" onChange={(e) => setSelectedFile(e.target.files?.[0] || null)} />
 
             {selectedFile && (
               <div className="rounded-md border bg-gray-50 p-3 text-sm">
                 <p className="font-medium text-slate-800">{selectedFile.name}</p>
                 <p className="mt-1 text-gray-600">Original size: {formatBytes(selectedFile.size)}</p>
+                <p className="mt-1 text-gray-600">
+                  Estimated encrypted upload size: {estimatedUploadBytes !== null ? formatBytes(estimatedUploadBytes) : "Preparing..."}
+                </p>
+                {requiresCompression && (
+                  <p className="mt-1 text-xs text-blue-700">
+                    {cannotAutoCompressPractically
+                      ? "This file is above the 1.5 GB limit and this format is not suitable for automatic compression."
+                      : "This file is above the 1.5 GB limit, so compression has been enabled automatically."}
+                  </p>
+                )}
                 {likelyUnhelpfulCompression && (
                   <p className="mt-1 text-xs text-amber-700">
                     This file type is usually already compressed. Compression may not reduce size.
@@ -232,10 +335,16 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
                   <input
                     type="checkbox"
                     checked={compressBeforeUpload}
-                    disabled={!compressionSupported || compressionBusy}
+                    disabled={!compressionSupported || compressionBusy || requiresCompression || cannotAutoCompressPractically}
                     onChange={(e) => setCompressBeforeUpload(e.target.checked)}
                   />
-                  <span>Compress before upload (gzip)</span>
+                  <span>
+                    {cannotAutoCompressPractically
+                      ? "Automatic compression unavailable for this file type"
+                      : requiresCompression
+                      ? "Compression required for this file (gzip)"
+                      : "Compress before upload (gzip)"}
+                  </span>
                 </label>
                 {compressBeforeUpload && (
                   <div className="mt-2 text-xs text-gray-700">
@@ -247,17 +356,23 @@ function AddItemModal({ onClose, parentFolderId = null, onSuccess }) {
                           Saved: {formatBytes(Math.max(0, compressionStats.savedBytes))} (
                           {Math.max(0, compressionStats.savedPercent).toFixed(1)}%)
                         </p>
+                        <p>Estimated encrypted upload size: {formatBytes(estimateEncryptedSize(compressionStats.compressedSize))}</p>
                       </>
                     )}
                     {!compressionBusy && compressionError && <p className="text-red-600">{compressionError}</p>}
                   </div>
+                )}
+                {storageWouldOverflow && (
+                  <p className="mt-2 text-xs text-red-600">
+                    This upload exceeds the remaining account storage of {formatBytes(remainingStorageBytes)}.
+                  </p>
                 )}
               </div>
             )}
 
             <button
               onClick={handleUploadFile}
-              disabled={!selectedFile || uploadBusy || compressionBusy}
+              disabled={uploadBlocked}
               className="w-full rounded-md bg-slate-900 py-2 text-white disabled:opacity-60"
             >
               {uploadBusy ? "Uploading..." : "Upload to Vault"}

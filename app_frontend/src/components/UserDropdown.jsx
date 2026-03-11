@@ -10,6 +10,7 @@ import {
 import { clearSession, getAccessToken, getUser, setUser } from "../utils/session";
 import { clearMasterKey } from "../utils/keyStore";
 import { apiFetch } from "../utils/api";
+import { formatBytes } from "../utils/storage";
 
 function formatDateTime(value) {
   if (!value) return "Not available";
@@ -50,6 +51,9 @@ function UserDropdown() {
           last_login: data.last_login,
           created_at: data.created_at,
           total_documents: data.total_documents ?? 0,
+          used_storage_bytes: data.used_storage_bytes ?? 0,
+          storage_quota_bytes: data.storage_quota_bytes ?? 0,
+          remaining_storage_bytes: data.remaining_storage_bytes ?? 0,
         };
         setUser(nextUser);
         setUserState(nextUser);
@@ -113,6 +117,14 @@ function UserDropdown() {
               Last Login:
               <span className="ml-auto text-gray-600">
                 {formatDateTime(user?.last_login)}
+              </span>
+            </div>
+
+            <div className="flex items-center text-sm text-gray-700">
+              <Folder className="w-4 h-4 mr-2 text-slate-500" />
+              Storage:
+              <span className="ml-auto font-semibold">
+                {formatBytes(user?.used_storage_bytes ?? 0)} / {formatBytes(user?.storage_quota_bytes ?? 0)}
               </span>
             </div>
           </div>

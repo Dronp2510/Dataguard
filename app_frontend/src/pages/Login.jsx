@@ -79,6 +79,9 @@ function Login() {
                   email: data.email,
                   last_login: data.last_login,
                   total_documents: 0,
+                  used_storage_bytes: 0,
+                  storage_quota_bytes: 15 * 1024 * 1024 * 1024,
+                  remaining_storage_bytes: 15 * 1024 * 1024 * 1024,
                 });
 
                 setSession({
