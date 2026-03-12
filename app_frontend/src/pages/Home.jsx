@@ -527,8 +527,19 @@ function Home() {
               })}
             </div>
 
-            <div className="hidden overflow-x-auto md:block">
-            <table className="min-w-full text-sm">
+            <div className="hidden md:block">
+            <table className="w-full table-fixed text-sm">
+              <colgroup>
+                <col className="w-[31%]" />
+                <col className="w-[13%]" />
+                <col className="w-[9%]" />
+                <col className="w-[10%]" />
+                <col className="w-[11%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[10%]" />
+                <col className="w-[6%]" />
+              </colgroup>
               <thead>
                 <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-gray-500">
                   <th className="px-6 py-3">Name</th>
@@ -552,11 +563,11 @@ function Home() {
                     <Fragment key={row.share_id}>
                       <tr className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
                         <td className="px-6 py-3 font-medium text-slate-900" title={row.name}>
-                          <span className="block max-w-xs truncate">{row.name}</span>
+                          <span className="block truncate">{row.name}</span>
                         </td>
                         <td className="px-6 py-3">
                           <button
-                            className="text-left text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
+                            className="block w-full truncate text-left text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
                             disabled={!row.viewer_entries?.length}
                             onClick={() =>
                               setExpandedShareId(isExpanded ? null : row.share_id)
@@ -580,11 +591,12 @@ function Home() {
                         </td>
                         <td className="px-6 py-3">
                           <button
-                            className="text-left text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
+                            className="block w-full truncate text-left text-blue-700 hover:underline disabled:text-gray-400 disabled:no-underline"
                             disabled={!row.latest_time_accessed}
                             onClick={() =>
                               setExpandedShareId(isExpanded ? null : row.share_id)
                             }
+                            title={row.latest_time_accessed ? formatDateTime(row.latest_time_accessed) : ""}
                           >
                             {formatDateTime(row.latest_time_accessed)}
                           </button>
@@ -594,7 +606,7 @@ function Home() {
                             {statusLabel(row.status)}
                           </span>
                         </td>
-                        <td className="px-6 py-3 text-right">
+                        <td className="px-4 py-3 pr-6 text-right">
                           <ShareActionMenu
                             row={row}
                             openMenuId={openMenuId}
