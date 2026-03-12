@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
-import { Activity, FolderOpen, Home, Settings, Shield } from "lucide-react";
+import { Activity, FolderOpen, Home, Settings } from "lucide-react";
+import DataGuardLogo from "./DataGuardLogo";
 
 const items = [
   { to: "/app", label: "Home", icon: Home, end: true },
@@ -19,7 +20,14 @@ function Sidebar({ collapsed = false, mobileOpen = false, onClose }) {
     >
       <div className="flex h-16 items-center gap-3 border-b border-slate-800 px-4">
         <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600/20 text-blue-200">
-          <Shield size={18} />
+          <DataGuardLogo
+            className="scale-[0.56]"
+            iconColor="#DBEAFE"
+            shieldSize={30}
+            eyeSize={14}
+            shieldStrokeWidth={2}
+            eyeStrokeWidth={1.8}
+          />
         </div>
         {!collapsed && <span className="text-lg font-semibold tracking-wide">DataGuard</span>}
       </div>
