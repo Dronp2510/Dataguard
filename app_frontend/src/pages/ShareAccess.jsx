@@ -110,25 +110,38 @@ async function buildWatermarkedImageBlob(imageBlob, watermarkText, mimeType) {
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
 
     const text = normalizeWatermarkText(watermarkText);
-    const fontSize = Math.max(28, Math.min(64, Math.round(Math.min(canvas.width, canvas.height) / 14)));
-    const yGap = Math.max(170, Math.round(fontSize * 2.4));
+    const shortSide = Math.min(canvas.width, canvas.height);
+    const compactLayout = shortSide <= 720;
+    const fontSize = compactLayout
+      ? Math.max(18, Math.min(30, Math.round(shortSide / 18)))
+      : Math.max(24, Math.min(44, Math.round(shortSide / 16)));
 
-    ctx.font = `700 ${fontSize}px Arial`;
+    ctx.font = `600 ${fontSize}px Arial`;
     const textWidth = Math.ceil(ctx.measureText(text).width);
-    const xGap = Math.max(Math.round(textWidth + 110), Math.round(canvas.width / 2.5));
+    const xGap = compactLayout
+      ? Math.max(Math.round(textWidth + fontSize * 7), Math.round(canvas.width * 0.82))
+      : Math.max(Math.round(textWidth + fontSize * 5.5), Math.round(canvas.width * 0.58));
+    const yGap = compactLayout
+      ? Math.max(Math.round(fontSize * 5.5), Math.round(canvas.height * 0.42))
+      : Math.max(Math.round(fontSize * 4.4), Math.round(canvas.height * 0.3));
+    const alpha = compactLayout ? 0.12 : 0.15;
 
     ctx.save();
-    ctx.globalAlpha = 0.3;
-    ctx.fillStyle = "#111";
-    ctx.strokeStyle = "rgba(255,255,255,0.7)";
-    ctx.lineWidth = Math.max(2, Math.round(fontSize / 12));
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "rgba(0,0,0,0.22)";
+    ctx.lineWidth = Math.max(1, Math.round(fontSize / 20));
     ctx.textBaseline = "middle";
+    ctx.shadowColor = "rgba(0,0,0,0.16)";
+    ctx.shadowBlur = Math.max(2, Math.round(fontSize / 5));
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.rotate((-25 * Math.PI) / 180);
-    for (let y = -canvas.height * 1.5; y <= canvas.height * 1.5; y += yGap) {
-      for (let x = -canvas.width * 1.5; x <= canvas.width * 1.5; x += xGap) {
-        ctx.strokeText(text, x, y);
-        ctx.fillText(text, x, y);
+    for (let row = 0, y = -canvas.height * 1.1; y <= canvas.height * 1.1; y += yGap, row += 1) {
+      const rowOffset = row % 2 === 0 ? 0 : -Math.round(xGap / 2);
+      for (let x = -canvas.width * 1.1; x <= canvas.width * 1.1; x += xGap) {
+        const drawX = x + rowOffset;
+        ctx.strokeText(text, drawX, y);
+        ctx.fillText(text, drawX, y);
       }
     }
     ctx.restore();
