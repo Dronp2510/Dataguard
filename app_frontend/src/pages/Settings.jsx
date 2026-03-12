@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, ChevronDown, ChevronUp, Lock, LogOut, Mail, ShieldCheck, User } from "lucide-react";
+import { ChevronDown, ChevronUp, Lock, LogOut, Mail, ShieldCheck, User } from "lucide-react";
 import { clearMasterKey, setMasterKey } from "../utils/keyStore";
 import { clearSession, getAccessToken, getSalt, setSession } from "../utils/session";
 import { apiFetch } from "../utils/api";
@@ -237,32 +237,6 @@ function Settings() {
         </article>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="mb-4 text-lg font-semibold text-slate-900">Recommended next settings</h3>
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
-            <div className="mb-2 inline-flex items-center gap-2 font-medium text-slate-900">
-              <ShieldCheck size={15} />
-              Password change
-            </div>
-            <p className="text-slate-600">Implemented with old-password verification and client-side re-wrapping of stored file keys.</p>
-          </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
-            <div className="mb-2 inline-flex items-center gap-2 font-medium text-slate-900">
-              <Bell size={15} />
-              Alert preferences
-            </div>
-            <p className="text-slate-600">Notify on new share access, view-limit reached, and link expiry reminders.</p>
-          </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
-            <div className="mb-2 inline-flex items-center gap-2 font-medium text-slate-900">
-              <Lock size={15} />
-              Trusted devices
-            </div>
-            <p className="text-slate-600">Track active devices and allow one-click revoke for suspicious sessions.</p>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

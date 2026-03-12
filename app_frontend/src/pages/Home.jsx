@@ -262,7 +262,7 @@ function Home() {
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-slate-900">Previous 6 uploaded files</h2>
+          <h2 className="text-xl font-semibold text-slate-900">Previous uploaded files</h2>
           <p className="text-sm text-gray-500">Files in view: {recentFiles}</p>
         </div>
 
