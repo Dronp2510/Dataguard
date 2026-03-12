@@ -4,7 +4,7 @@ import HowItWorks from "../components/HowItWorks";
 import ZeroKnowledgeSection from "../components/ZeroKnowledgeSection";
 import WhoIsDataGuardFor from "../components/WhoIsDataGuardFor";
 import { Link } from "react-router-dom";
-import { Activity, ArrowRight, FileText, FolderOpen, Key, Link as LinkIcon, Lock, Server, Shield, Share2 } from "lucide-react";
+import { Activity, FileText, FolderOpen, Key, Link as LinkIcon, Lock, Server, Shield, Share2 } from "lucide-react";
 
 function Landing() {
   const sectionRef = useRef(null);
@@ -195,9 +195,8 @@ function Landing() {
                   ].join(" ")}
                   style={{ transitionDelay: `${index * 120}ms` }}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center">
                     <Icon className="h-6 w-6 text-slate-700 transition-colors group-hover:text-blue-600" />
-                    <ArrowRight className="h-4 w-4 text-gray-400 transition-transform group-hover:translate-x-1" />
                   </div>
                   <h3 className="mt-3 text-lg font-semibold text-slate-900">{card.title}</h3>
                   <p className="mt-2 text-sm text-gray-600">{card.description}</p>
