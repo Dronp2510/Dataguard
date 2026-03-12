@@ -21,3 +21,16 @@ class VaultItemResponse(BaseModel):
     model_config = {
         "from_attributes": True
     }
+
+
+class PasswordWrappedKeyUpdate(BaseModel):
+    vault_item_id: str
+    encrypted_key: str
+    key_iv: str
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+    new_salt: str
+    wrapped_keys: list[PasswordWrappedKeyUpdate]

@@ -7,7 +7,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from ..core.rate_limit import client_identity, enforce_rate_limit
 from ..database import SessionLocal
-from ..models import AuthSession, File as VaultFile, User, VaultItem
+from ..models import AuthSession, EncryptedKey, File as VaultFile, User, VaultItem
+from ..schemas import PasswordChangeRequest
 from ..services.auth import bind_guest_identity_to_user, get_bearer_token, get_current_user
 from ..services.vault import get_storage_summary
 from ..utils import convert_datetimes_to_ist, generate_token, hash_token, new_session_expiry
@@ -24,9 +25,20 @@ def signup(
 ):
     db = SessionLocal()
     try:
+        username = username.strip()
+        email = email.strip().lower()
+        password = password.strip()
+
+        if len(username) < 1:
+            raise HTTPException(status_code=400, detail="Username is required")
+        if "@" not in email:
+            raise HTTPException(status_code=400, detail="Email must contain '@'")
+        if len(password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
+
         client = client_identity(request)
         enforce_rate_limit("signup_ip", client, 10, 60)
-        enforce_rate_limit("signup_email", email.lower(), 5, 300)
+        enforce_rate_limit("signup_email", email, 5, 300)
         existing = db.query(User).filter((User.email == email) | (User.username == username)).first()
         if existing:
             raise HTTPException(status_code=409, detail="User already exists")
@@ -119,5 +131,77 @@ def current_profile(current_user: User = Depends(get_current_user)):
             "total_documents": total_documents,
             **get_storage_summary(db, user.id),
         })
+    finally:
+        db.close()
+
+
+@router.get("/auth/key-wrappings")
+def get_key_wrappings(current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        key_rows = (
+            db.query(EncryptedKey)
+            .filter(EncryptedKey.user_id == current_user.id)
+            .order_by(EncryptedKey.vault_item_id.asc())
+            .all()
+        )
+        return {
+            "items": [
+                {
+                    "vault_item_id": row.vault_item_id,
+                    "encrypted_key": row.encrypted_key,
+                    "key_iv": row.iv,
+                }
+                for row in key_rows
+            ]
+        }
+    finally:
+        db.close()
+
+
+@router.post("/auth/change-password")
+def change_password(payload: PasswordChangeRequest, current_user: User = Depends(get_current_user)):
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.id == current_user.id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if not check_password_hash(user.password_hash, payload.current_password):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+        new_password = payload.new_password.strip()
+        if len(new_password) < 8:
+            raise HTTPException(status_code=400, detail="New password must be at least 8 characters long")
+
+        if payload.current_password == payload.new_password:
+            raise HTTPException(status_code=400, detail="New password must be different from the current password")
+
+        existing_rows = db.query(EncryptedKey).filter(EncryptedKey.user_id == user.id).all()
+        existing_ids = {row.vault_item_id for row in existing_rows}
+        submitted_ids = {row.vault_item_id for row in payload.wrapped_keys}
+
+        if existing_ids != submitted_ids:
+            raise HTTPException(
+                status_code=400,
+                detail="Password rotation requires a fresh wrapped key for every stored file",
+            )
+
+        updates_by_item_id = {}
+        for row in payload.wrapped_keys:
+            if not row.encrypted_key or not row.key_iv:
+                raise HTTPException(status_code=400, detail="Wrapped key data is incomplete")
+            updates_by_item_id[row.vault_item_id] = row
+
+        user.password_hash = generate_password_hash(payload.new_password)
+        user.salt = payload.new_salt
+
+        for key_row in existing_rows:
+            updated = updates_by_item_id[key_row.vault_item_id]
+            key_row.encrypted_key = updated.encrypted_key
+            key_row.iv = updated.key_iv
+
+        db.commit()
+        return {"message": "Password changed successfully", "salt": user.salt}
     finally:
         db.close()

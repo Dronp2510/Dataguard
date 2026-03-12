@@ -223,3 +223,26 @@ export async function rewrapFileKeyForShare(encryptedKeyB64, keyIvB64, masterKey
     keyIv: bufToBase64(shareIv),
   };
 }
+
+export async function rewrapEncryptedFileKey(encryptedKeyB64, keyIvB64, currentMasterKey, nextMasterKey) {
+  const encryptedKey = base64ToBuf(encryptedKeyB64);
+  const currentIv = base64ToBuf(keyIvB64);
+  const nextIv = crypto.getRandomValues(new Uint8Array(12));
+
+  const rawKey = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: currentIv },
+    currentMasterKey,
+    encryptedKey
+  );
+
+  const nextEncryptedKey = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: nextIv },
+    nextMasterKey,
+    rawKey
+  );
+
+  return {
+    encryptedKey: bufToBase64(nextEncryptedKey),
+    keyIv: bufToBase64(nextIv),
+  };
+}

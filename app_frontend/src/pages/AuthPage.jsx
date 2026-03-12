@@ -10,6 +10,10 @@ const storageQuotaBytes = 15 * 1024 * 1024 * 1024;
 const slideDurationMs = 500;
 const signupDelayMs = 1000;
 
+function isValidEmail(value) {
+  return String(value || "").includes("@");
+}
+
 const panelCopy = {
   signup: {
     gradientTitle: "Welcome Back, Friend!",
@@ -95,8 +99,16 @@ function AuthPage() {
   };
 
   const handleSignup = async () => {
+    if (!isValidEmail(email)) {
+      setError("Email must contain '@'.");
+      return;
+    }
     if (password !== confirm) {
       setError("Passwords do not match.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long.");
       return;
     }
 
@@ -139,6 +151,10 @@ function AuthPage() {
   };
 
   const handleLogin = async () => {
+    if (!isValidEmail(email)) {
+      setError("Email must contain '@'.");
+      return;
+    }
     setSubmitting(true);
     setError("");
     setSuccess("");
@@ -409,7 +425,19 @@ function FormPanel({
           />
         )}
 
-        {!isSignup && <p className="text-right text-sm text-slate-500">{helperText}</p>}
+        {!isSignup && (
+          <button
+            type="button"
+            className="block w-full text-right text-sm text-slate-500 transition hover:text-slate-700"
+            onClick={() => {
+              window.alert(
+                "Password recovery is not implemented yet. In this system, a real reset flow should use a recovery key or another key-recovery mechanism so encrypted files remain accessible."
+              );
+            }}
+          >
+            {helperText}
+          </button>
+        )}
 
         <button
           type="submit"
