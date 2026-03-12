@@ -136,7 +136,7 @@ function Landing() {
         </div>
       </section>
 
-      <section id="security" className="bg-white py-24">
+      <section id="security" className="scroll-mt-24 bg-white py-24">
         <div className="mx-auto max-w-6xl px-6 text-center">
           <h2 className="text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
             Your Documents Are More Vulnerable Than You Think
@@ -166,7 +166,7 @@ function Landing() {
         </div>
       </section>
 
-      <section className="bg-gradient-to-b from-white to-[#F8F9FB] pt-30 pb-28">
+      <section id="features" className="scroll-mt-24 bg-gradient-to-b from-white to-[#F8F9FB] pt-30 pb-28">
         <div className="mx-auto grid max-w-7xl items-center gap-16 px-6 md:grid-cols-2">
           <div>
             <h2 className="text-4xl font-bold leading-tight text-slate-900 md:text-5xl">

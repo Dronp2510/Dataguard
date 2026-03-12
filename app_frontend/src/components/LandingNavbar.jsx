@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Menu } from "lucide-react";
 import DataGuardLogo from "../components/DataGuardLogo";
@@ -12,10 +12,64 @@ const navLinks = [
 function LandingNavbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const [activeSection, setActiveSection] = useState("");
+
+  const sectionIds = useMemo(() => navLinks.map((link) => link.href.slice(1)), []);
 
   useEffect(() => {
     setIsVisible(true);
   }, []);
+
+  useEffect(() => {
+    const resolveInitialSection = () => {
+      const hashId = window.location.hash.replace("#", "");
+      if (hashId && sectionIds.includes(hashId)) {
+        setActiveSection(hashId);
+        return;
+      }
+      setActiveSection(sectionIds[0] || "");
+    };
+
+    resolveInitialSection();
+
+    const sections = sectionIds
+      .map((id) => document.getElementById(id))
+      .filter(Boolean);
+
+    if (!sections.length) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleEntries = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+
+        if (!visibleEntries.length) return;
+
+        setActiveSection(visibleEntries[0].target.id);
+      },
+      {
+        rootMargin: "-30% 0px -45% 0px",
+        threshold: [0.2, 0.35, 0.5, 0.65],
+      }
+    );
+
+    sections.forEach((section) => observer.observe(section));
+
+    const handleHashChange = () => {
+      const hashId = window.location.hash.replace("#", "");
+      if (hashId && sectionIds.includes(hashId)) {
+        setActiveSection(hashId);
+      }
+    };
+
+    window.addEventListener("hashchange", handleHashChange);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("hashchange", handleHashChange);
+    };
+  }, [sectionIds]);
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen((prev) => !prev);
@@ -23,6 +77,18 @@ function LandingNavbar() {
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
+  };
+
+  const handleNavClick = (event, href) => {
+    const targetId = href.slice(1);
+    const target = document.getElementById(targetId);
+    if (!target) return;
+
+    event.preventDefault();
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.history.replaceState(null, "", href);
+    setActiveSection(targetId);
+    closeMobileMenu();
   };
 
   return (
@@ -49,10 +115,24 @@ function LandingNavbar() {
             <a
               key={link.href}
               href={link.href}
-              className="group relative text-gray-600 transition-colors duration-300 hover:text-slate-900"
+              onClick={(event) => handleNavClick(event, link.href)}
+              className={[
+                "group relative rounded-full px-3 py-2 transition-all duration-300",
+                activeSection === link.href.slice(1)
+                  ? "bg-blue-50 text-[#1E3A8A]"
+                  : "text-gray-600 hover:text-slate-900",
+              ].join(" ")}
+              aria-current={activeSection === link.href.slice(1) ? "page" : undefined}
             >
               {link.label}
-              <span className="absolute -bottom-1 left-0 h-0.5 w-full origin-left scale-x-0 bg-slate-900 transition-transform duration-300 group-hover:scale-x-100" />
+              <span
+                className={[
+                  "absolute -bottom-1 left-3 right-3 h-0.5 origin-left transition-transform duration-300",
+                  activeSection === link.href.slice(1)
+                    ? "scale-x-100 bg-[#1E3A8A]"
+                    : "scale-x-0 bg-slate-900 group-hover:scale-x-100",
+                ].join(" ")}
+              />
             </a>
           ))}
         </div>
@@ -98,8 +178,14 @@ function LandingNavbar() {
             <a
               key={`mobile-${link.href}`}
               href={link.href}
-              className="text-gray-700 transition-colors duration-300 hover:text-slate-900"
-              onClick={closeMobileMenu}
+              className={[
+                "rounded-lg px-3 py-2 transition-colors duration-300",
+                activeSection === link.href.slice(1)
+                  ? "bg-blue-50 font-medium text-[#1E3A8A]"
+                  : "text-gray-700 hover:text-slate-900",
+              ].join(" ")}
+              onClick={(event) => handleNavClick(event, link.href)}
+              aria-current={activeSection === link.href.slice(1) ? "page" : undefined}
             >
               {link.label}
             </a>

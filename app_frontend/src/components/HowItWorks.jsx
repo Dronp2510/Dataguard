@@ -47,7 +47,7 @@ function HowItWorks() {
   ];
 
   return (
-    <section className="bg-white py-32">
+    <section id="how-it-works" className="scroll-mt-24 bg-white py-32">
       <div className="mx-auto max-w-6xl px-6 text-center">
         <div className="mb-20">
           <h2 className="text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">How It Works</h2>
