@@ -65,7 +65,7 @@ Backend deploy uses runtime dependencies from `requirements.txt` only.
 - Ensure backend env includes:
   - `APP_ENV=production`
   - `CORS_ORIGINS=https://<your-frontend-domain>`
-  - `MAX_UPLOAD_BYTES=26214400` (25 MB)
+  - `MAX_UPLOAD_BYTES=1610612736` (1.5 GB)
 
 ## 8. One-time history cleanup (recommended)
 
