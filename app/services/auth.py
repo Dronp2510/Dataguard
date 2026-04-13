@@ -45,6 +45,8 @@ def resolve_user_from_access_token(db, access_token: str) -> User:
 def normalize_guest_id(raw_guest_id: str | None) -> str | None:
     if not raw_guest_id:
         return None
+    if not isinstance(raw_guest_id, str):
+        return None
     guest_id = raw_guest_id.strip()
     if not guest_id:
         return None

@@ -223,13 +223,26 @@ def activity_logs(current_user: User = Depends(get_current_user)):
 
         now = datetime.now(timezone.utc)
         shares = db.query(Share).filter(Share.owner_id == current_user.id).order_by(Share.created_at.desc()).all()
+        share_ids = [share.id for share in shares]
+        file_ids = {share.vault_item_id for share in shares}
+        file_map = {
+            file_row.id: file_row.filename
+            for file_row in db.query(VaultFile).filter(VaultFile.id.in_(file_ids)).all()
+        } if file_ids else {}
+        logs_by_share_id: dict[str, list[ShareAccessLog]] = {}
+        if share_ids:
+            all_logs = (
+                db.query(ShareAccessLog)
+                .filter(ShareAccessLog.share_id.in_(share_ids))
+                .order_by(ShareAccessLog.created_at.desc())
+                .all()
+            )
+            for log in all_logs:
+                logs_by_share_id.setdefault(log.share_id, []).append(log)
 
         result = []
         for share in shares:
-            file = db.query(VaultFile).filter(VaultFile.id == share.vault_item_id).first()
-            logs = (
-                db.query(ShareAccessLog).filter(ShareAccessLog.share_id == share.id).order_by(ShareAccessLog.created_at.desc()).all()
-            )
+            logs = logs_by_share_id.get(share.id, [])
             access_logs = [log for log in logs if log.action in {"preview", "download"}]
             download_count = sum(1 for log in access_logs if log.action == "download")
 
@@ -270,7 +283,7 @@ def activity_logs(current_user: User = Depends(get_current_user)):
                 {
                     "share_id": share.id,
                     "file_id": share.vault_item_id,
-                    "name": file.filename if file else "Unknown File",
+                    "name": file_map.get(share.vault_item_id, "Unknown File"),
                     "accessed_by": latest_log.viewer_label if latest_log else "No access yet",
                     "unique_viewer_count": len(viewer_entries),
                     "viewer_entries": viewer_entries,

@@ -27,6 +27,11 @@ def list_notifications(
 
         share_map = {share.id: share for share in shares}
         share_ids = list(share_map.keys())
+        file_ids = {share.vault_item_id for share in shares}
+        file_map = {
+            file_row.id: file_row.filename
+            for file_row in db.query(VaultFile).filter(VaultFile.id.in_(file_ids)).all()
+        }
         logs = (
             db.query(ShareAccessLog)
             .filter(ShareAccessLog.share_id.in_(share_ids))
@@ -35,17 +40,12 @@ def list_notifications(
             .limit(limit)
             .all()
         )
-        file_cache: dict[str, str] = {}
         items = []
         for log in logs:
             share = share_map.get(log.share_id)
             if not share:
                 continue
-            filename = file_cache.get(share.vault_item_id)
-            if filename is None:
-                file_row = db.query(VaultFile).filter(VaultFile.id == share.vault_item_id).first()
-                filename = file_row.filename if file_row else "Unknown File"
-                file_cache[share.vault_item_id] = filename
+            filename = file_map.get(share.vault_item_id, "Unknown File")
             items.append(build_notification_payload(log, share, filename))
         seen_at = current_user.notifications_seen_at
         unread_query = (
@@ -93,6 +93,11 @@ async def notification_stream(access_token: str = Query(...)):
                 if shares:
                     share_map = {share.id: share for share in shares}
                     share_ids = list(share_map.keys())
+                    file_ids = {share.vault_item_id for share in shares}
+                    file_map = {
+                        file_row.id: file_row.filename
+                        for file_row in stream_db.query(VaultFile).filter(VaultFile.id.in_(file_ids)).all()
+                    }
                     logs = (
                         stream_db.query(ShareAccessLog)
                         .filter(ShareAccessLog.share_id.in_(share_ids))
@@ -102,16 +107,11 @@ async def notification_stream(access_token: str = Query(...)):
                         .all()
                     )
                     if logs:
-                        file_cache: dict[str, str] = {}
                         for log in logs:
                             share = share_map.get(log.share_id)
                             if not share:
                                 continue
-                            filename = file_cache.get(share.vault_item_id)
-                            if filename is None:
-                                file_row = stream_db.query(VaultFile).filter(VaultFile.id == share.vault_item_id).first()
-                                filename = file_row.filename if file_row else "Unknown File"
-                                file_cache[share.vault_item_id] = filename
+                            filename = file_map.get(share.vault_item_id, "Unknown File")
 
                             payload = convert_datetimes_to_ist(build_notification_payload(log, share, filename))
                             yield f"event: notification\ndata: {json.dumps(payload, default=str)}\n\n"

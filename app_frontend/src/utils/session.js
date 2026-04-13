@@ -9,6 +9,7 @@ function notifyAuthChanged() {
 function getStoredValue(key) {
   const sessionValue = sessionStorage.getItem(key);
   if (sessionValue) return sessionValue;
+  if (key === "dg_access_token") return null;
   const localValue = localStorage.getItem(key);
   if (localValue) {
     sessionStorage.setItem(key, localValue);
@@ -56,7 +57,7 @@ export function setSession({ user_id, salt, token, expires_at }) {
   sessionStorage.setItem("dg_access_token", token);
   localStorage.setItem("dg_user_id", user_id);
   localStorage.setItem("dg_salt", salt);
-  localStorage.setItem("dg_access_token", token);
+  localStorage.removeItem("dg_access_token");
   if (expiryIso) {
     sessionStorage.setItem("dg_session_expires_at", expiryIso);
     localStorage.setItem("dg_session_expires_at", expiryIso);
