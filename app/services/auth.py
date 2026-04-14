@@ -52,7 +52,7 @@ def normalize_guest_id(raw_guest_id: str | None) -> str | None:
 
 
 def user_watermark_label(user: User) -> str:
-    return f"User: {user.id} | {user.username}"
+    return f"UserID: {user.id} | Username: {user.username}"
 
 
 def bind_guest_identity_to_user(db, raw_guest_id: str | None, user: User) -> None:
