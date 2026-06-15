@@ -21,6 +21,8 @@ def initialize_database() -> None:
     ensure_sqlite_column("files", "compressed_size", "INTEGER")
     ensure_sqlite_column("shares", "owner_id", "VARCHAR")
     ensure_sqlite_column("shares", "token", "VARCHAR")
+    ensure_sqlite_column("shares", "token_hash", "VARCHAR")
+    ensure_sqlite_column("shares", "token_prefix", "VARCHAR")
     ensure_sqlite_column("shares", "key_iv", "VARCHAR")
     ensure_sqlite_column("shares", "key_salt", "VARCHAR")
     ensure_sqlite_column("shares", "max_views", "INTEGER")

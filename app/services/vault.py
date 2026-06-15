@@ -3,7 +3,7 @@ import os
 from fastapi import HTTPException
 
 from ..models import EncryptedKey, File as VaultFile, Folder, VaultItem, VaultItemType
-from ..utils import MAX_UPLOAD_BYTES, MAX_USER_STORAGE_BYTES
+from ..utils import MAX_UPLOAD_BYTES, MAX_USER_STORAGE_BYTES, safe_unlink_storage_path
 
 
 def ensure_item_owner(db, item_id: str, user_id: str) -> VaultItem:
@@ -26,10 +26,7 @@ def delete_vault_item_tree(db, item_id: str, owner_id: str) -> None:
     else:
         file_row = db.query(VaultFile).filter(VaultFile.id == item.id).first()
         if file_row:
-            try:
-                os.remove(file_row.storage_path)
-            except FileNotFoundError:
-                pass
+            safe_unlink_storage_path(file_row.storage_path)
         db.query(VaultFile).filter(VaultFile.id == item.id).delete()
         db.query(EncryptedKey).filter(EncryptedKey.vault_item_id == item.id).delete()
 

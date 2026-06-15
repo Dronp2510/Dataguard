@@ -1,3 +1,4 @@
+import os
 import time
 from collections import deque
 from threading import Lock
@@ -6,11 +7,12 @@ from fastapi import HTTPException, Request
 
 RATE_BUCKETS: dict[str, deque[float]] = {}
 RATE_LOCK = Lock()
+TRUST_PROXY_HEADERS = os.getenv("TRUST_PROXY_HEADERS", "false").lower() in {"1", "true", "yes"}
 
 
 def client_identity(request: Request) -> str:
     forwarded_for = request.headers.get("x-forwarded-for", "").strip()
-    if forwarded_for:
+    if TRUST_PROXY_HEADERS and forwarded_for:
         return forwarded_for.split(",")[0].strip()
     if request.client and request.client.host:
         return request.client.host

@@ -1,3 +1,5 @@
+import asyncio
+from threading import Lock
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -9,9 +11,28 @@ from ..models import EncryptedKey, File as VaultFile, Folder, User, VaultItem, V
 from ..schemas import VaultItemResponse
 from ..services.auth import get_current_user
 from ..services.vault import delete_vault_item_tree, ensure_item_owner, get_storage_summary
-from ..utils import MAX_UPLOAD_BYTES, STORAGE_PATH, convert_datetimes_to_ist
+from ..utils import (
+    MAX_UPLOAD_BYTES,
+    STORAGE_PATH,
+    convert_datetimes_to_ist,
+    resolve_storage_path,
+    sanitize_display_name,
+    sanitize_mime_type,
+    validate_metadata_value,
+)
 
 router = APIRouter()
+UPLOAD_LOCKS: dict[str, asyncio.Lock] = {}
+UPLOAD_LOCKS_GUARD = Lock()
+
+
+def upload_lock_for_user(user_id: str) -> asyncio.Lock:
+    with UPLOAD_LOCKS_GUARD:
+        lock = UPLOAD_LOCKS.get(user_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            UPLOAD_LOCKS[user_id] = lock
+        return lock
 
 
 @router.post("/vault/files")
@@ -34,78 +55,87 @@ async def upload_encrypted_file(
     db = SessionLocal()
     try:
         enforce_rate_limit("upload", f"{current_user.id}:{client_identity(request)}", 20, 60)
-        storage_summary = get_storage_summary(db, current_user.id)
-        if storage_summary["remaining_storage_bytes"] <= 0:
-            raise HTTPException(status_code=413, detail="Storage limit reached for this account")
+        filename = sanitize_display_name(filename, "filename")
+        original_filename = sanitize_display_name(original_filename, "original_filename", default=filename)
+        mime_type = sanitize_mime_type(mime_type)
+        validate_metadata_value(encrypted_key, "encrypted_key")
+        validate_metadata_value(iv, "iv")
+        validate_metadata_value(key_iv, "key_iv")
 
-        if parent_folder_id:
-            parent = ensure_item_owner(db, parent_folder_id, current_user.id)
-            if parent.type != VaultItemType.folder:
-                raise HTTPException(status_code=400, detail="Parent must be a folder")
+        async with upload_lock_for_user(current_user.id):
+            storage_summary = get_storage_summary(db, current_user.id)
+            if storage_summary["remaining_storage_bytes"] <= 0:
+                raise HTTPException(status_code=413, detail="Storage limit reached for this account")
 
-        if is_compressed and compression_algo not in {"gzip"}:
-            raise HTTPException(status_code=400, detail="Unsupported compression algorithm")
-        if original_size is not None and original_size < 0:
-            raise HTTPException(status_code=400, detail="Invalid original_size")
-        if compressed_size is not None and compressed_size < 0:
-            raise HTTPException(status_code=400, detail="Invalid compressed_size")
+            if parent_folder_id:
+                parent = ensure_item_owner(db, parent_folder_id, current_user.id)
+                if parent.type != VaultItemType.folder:
+                    raise HTTPException(status_code=400, detail="Parent must be a folder")
 
-        stored_name = str(uuid4())
-        file_path = STORAGE_PATH / stored_name
+            if is_compressed and compression_algo not in {"gzip"}:
+                raise HTTPException(status_code=400, detail="Unsupported compression algorithm")
+            if original_size is not None and original_size < 0:
+                raise HTTPException(status_code=400, detail="Invalid original_size")
+            if compressed_size is not None and compressed_size < 0:
+                raise HTTPException(status_code=400, detail="Invalid compressed_size")
 
-        size_read = 0
-        chunk_size = 1024 * 1024
-        try:
-            with open(file_path, "wb") as f:
-                while True:
-                    chunk = await encrypted_file.read(chunk_size)
-                    if not chunk:
-                        break
-                    size_read += len(chunk)
-                    if size_read > MAX_UPLOAD_BYTES:
-                        raise HTTPException(status_code=413, detail="File exceeds upload size limit")
-                    f.write(chunk)
-        except HTTPException:
-            if file_path.exists():
-                file_path.unlink(missing_ok=True)
-            raise
+            stored_name = str(uuid4())
+            file_path = STORAGE_PATH / stored_name
 
-        if size_read > storage_summary["remaining_storage_bytes"]:
-            file_path.unlink(missing_ok=True)
-            raise HTTPException(status_code=413, detail="Storage quota exceeded for this account")
+            size_read = 0
+            chunk_size = 1024 * 1024
+            try:
+                with open(file_path, "wb") as f:
+                    while True:
+                        chunk = await encrypted_file.read(chunk_size)
+                        if not chunk:
+                            break
+                        size_read += len(chunk)
+                        if size_read > MAX_UPLOAD_BYTES:
+                            raise HTTPException(status_code=413, detail="File exceeds upload size limit")
+                        f.write(chunk)
 
-        vault_item = VaultItem(type=VaultItemType.file, parent_id=parent_folder_id, owner_id=current_user.id)
-        db.add(vault_item)
-        db.flush()
+                storage_summary = get_storage_summary(db, current_user.id)
+                if size_read > storage_summary["remaining_storage_bytes"]:
+                    raise HTTPException(status_code=413, detail="Storage quota exceeded for this account")
 
-        file = VaultFile(
-            id=vault_item.id,
-            filename=filename,
-            mime_type=mime_type,
-            storage_path=str(file_path),
-            stored_size=size_read,
-            iv=iv,
-            is_compressed=is_compressed,
-            compression_algo=compression_algo if is_compressed else None,
-            original_filename=(original_filename or filename),
-            original_size=original_size,
-            compressed_size=compressed_size,
-        )
-        db.add(file)
+                vault_item = VaultItem(type=VaultItemType.file, parent_id=parent_folder_id, owner_id=current_user.id)
+                db.add(vault_item)
+                db.flush()
 
-        key = EncryptedKey(
-            vault_item_id=vault_item.id,
-            user_id=current_user.id,
-            encrypted_key=encrypted_key,
-            iv=key_iv,
-        )
-        db.add(key)
+                file = VaultFile(
+                    id=vault_item.id,
+                    filename=filename,
+                    mime_type=mime_type,
+                    storage_path=str(file_path),
+                    stored_size=size_read,
+                    iv=iv,
+                    is_compressed=is_compressed,
+                    compression_algo=compression_algo if is_compressed else None,
+                    original_filename=original_filename,
+                    original_size=original_size,
+                    compressed_size=compressed_size,
+                )
+                db.add(file)
 
-        db.commit()
-        return {
-            "file_id": vault_item.id,
-            **get_storage_summary(db, current_user.id),
-        }
+                key = EncryptedKey(
+                    vault_item_id=vault_item.id,
+                    user_id=current_user.id,
+                    encrypted_key=encrypted_key,
+                    iv=key_iv,
+                )
+                db.add(key)
+
+                db.commit()
+                return {
+                    "file_id": vault_item.id,
+                    **get_storage_summary(db, current_user.id),
+                }
+            except Exception:
+                if file_path.exists():
+                    file_path.unlink(missing_ok=True)
+                db.rollback()
+                raise
     finally:
         db.close()
 
@@ -127,11 +157,12 @@ def create_folder(
         db.add(vault_item)
         db.flush()
 
-        folder = Folder(id=vault_item.id, name=name)
+        clean_name = sanitize_display_name(name, "Folder name")
+        folder = Folder(id=vault_item.id, name=clean_name)
         db.add(folder)
         db.commit()
 
-        return {"id": vault_item.id, "name": name}
+        return {"id": vault_item.id, "name": clean_name}
     finally:
         db.close()
 
@@ -179,11 +210,16 @@ def download_encrypted_blob(file_id: str, current_user: User = Depends(get_curre
         if not file:
             raise HTTPException(status_code=404, detail="File not found")
 
+        path = resolve_storage_path(file.storage_path)
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="File blob not found")
+
         return FileResponse(
-            path=file.storage_path,
-            media_type=file.mime_type,
+            path=path,
+            media_type="application/octet-stream",
             filename=file.filename,
-            headers={"Content-Disposition": f'inline; filename="{file.filename}"'},
+            content_disposition_type="attachment",
+            headers={"X-Content-Type-Options": "nosniff"},
         )
     finally:
         db.close()
@@ -283,9 +319,7 @@ def rename_item(
     db = SessionLocal()
     try:
         item = ensure_item_owner(db, item_id, current_user.id)
-        clean_name = new_name.strip()
-        if not clean_name:
-            raise HTTPException(status_code=400, detail="Name cannot be empty")
+        clean_name = sanitize_display_name(new_name, "Name")
 
         if item.type == VaultItemType.folder:
             row = db.query(Folder).filter(Folder.id == item_id).first()

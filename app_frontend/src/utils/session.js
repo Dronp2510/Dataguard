@@ -9,11 +9,7 @@ function notifyAuthChanged() {
 function getStoredValue(key) {
   const sessionValue = sessionStorage.getItem(key);
   if (sessionValue) return sessionValue;
-  const localValue = localStorage.getItem(key);
-  if (localValue) {
-    sessionStorage.setItem(key, localValue);
-    return localValue;
-  }
+  localStorage.removeItem(key);
   return null;
 }
 
@@ -36,13 +32,14 @@ function clearLegacyLocalStorageKeys() {
 export function setUser(user) {
   const serialized = JSON.stringify(user || {});
   sessionStorage.setItem("user", serialized);
-  localStorage.setItem("user", serialized);
+  localStorage.removeItem("user");
   notifyAuthChanged();
 }
 
 export function getUser() {
   try {
-    return JSON.parse(sessionStorage.getItem("user") || localStorage.getItem("user") || "{}");
+    localStorage.removeItem("user");
+    return JSON.parse(sessionStorage.getItem("user") || "{}");
   } catch {
     return {};
   }
@@ -54,12 +51,12 @@ export function setSession({ user_id, salt, token, expires_at }) {
   sessionStorage.setItem("dg_user_id", user_id);
   sessionStorage.setItem("dg_salt", salt);
   sessionStorage.setItem("dg_access_token", token);
-  localStorage.setItem("dg_user_id", user_id);
-  localStorage.setItem("dg_salt", salt);
-  localStorage.setItem("dg_access_token", token);
+  localStorage.removeItem("dg_user_id");
+  localStorage.removeItem("dg_salt");
+  localStorage.removeItem("dg_access_token");
   if (expiryIso) {
     sessionStorage.setItem("dg_session_expires_at", expiryIso);
-    localStorage.setItem("dg_session_expires_at", expiryIso);
+    localStorage.removeItem("dg_session_expires_at");
   } else {
     sessionStorage.removeItem("dg_session_expires_at");
     localStorage.removeItem("dg_session_expires_at");

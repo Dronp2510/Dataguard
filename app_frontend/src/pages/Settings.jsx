@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronUp, Lock, LogOut, Mail, ShieldCheck, User } from "lucide-react";
 import { clearMasterKey, setMasterKey } from "../utils/keyStore";
-import { clearSession, getAccessToken, getSalt, setSession } from "../utils/session";
+import { clearSession, getAccessToken, getSalt, getUser, setSession } from "../utils/session";
 import { apiFetch } from "../utils/api";
 import { deriveMasterKey, randomBase64, rewrapEncryptedFileKey } from "../utils/crypto";
 
@@ -22,13 +22,7 @@ function Settings() {
   const [passwordError, setPasswordError] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordPanelOpen, setPasswordPanelOpen] = useState(false);
-  const user = useMemo(() => {
-    try {
-      return JSON.parse(sessionStorage.getItem("user") || localStorage.getItem("user") || "{}");
-    } catch {
-      return {};
-    }
-  }, []);
+  const user = useMemo(() => getUser(), []);
 
   const sessionExpiry = sessionStorage.getItem("dg_session_expires_at");
 

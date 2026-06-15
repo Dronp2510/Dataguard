@@ -2,16 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { apiFetch } from "../utils/api";
 import { decryptFile, decryptSharedFileKey, deriveShareKey, gzipDecompressArrayBuffer } from "../utils/crypto";
+import { escapeHtml, sanitizeHtml } from "../utils/sanitizeHtml";
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
 import mammoth from "mammoth";
 import JSZip from "jszip";
 
 function getOrCreateGuestId(token) {
-  const key = `dg_guest_${token}`;
-  const existing = localStorage.getItem(key) || sessionStorage.getItem(key);
+  const key = `dg_guest_${token.slice(0, 16)}`;
+  const existing = sessionStorage.getItem(key);
   if (existing) return existing;
-  const created = `guest-${token.slice(0, 8)}-${Math.random().toString(36).slice(2, 8)}`;
-  localStorage.setItem(key, created);
+  const random = Array.from(crypto.getRandomValues(new Uint8Array(6)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const created = `guest-${token.slice(0, 8)}-${random}`;
   sessionStorage.setItem(key, created);
   return created;
 }
@@ -54,7 +55,8 @@ function openBlobInNewTab(blob, fallbackFilename) {
 }
 
 function buildPdfInlineViewerHtml(pdfUrl, filename) {
-  return `<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>${filename}</title><style>html,body{height:100%;margin:0;background:#0b0b0b} .frame{height:100%;width:100%} .fallback{position:fixed;left:0;right:0;bottom:0;background:#111;color:#fff;padding:10px;font-family:Arial,sans-serif;font-size:13px;text-align:center} a{color:#7dd3fc}</style></head><body><object class='frame' data='${pdfUrl}' type='application/pdf'><embed class='frame' src='${pdfUrl}' type='application/pdf' /></object><div class='fallback'>If PDF is not visible, <a href='${pdfUrl}' target='_blank' rel='noopener noreferrer'>open it directly</a>.</div></body></html>`;
+  const safeUrl = escapeHtml(pdfUrl);
+  return `<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>${escapeHtml(filename)}</title><style>html,body{height:100%;margin:0;background:#0b0b0b} .frame{height:100%;width:100%} .fallback{position:fixed;left:0;right:0;bottom:0;background:#111;color:#fff;padding:10px;font-family:Arial,sans-serif;font-size:13px;text-align:center} a{color:#7dd3fc}</style></head><body><object class='frame' data='${safeUrl}' type='application/pdf'><embed class='frame' src='${safeUrl}' type='application/pdf' /></object><div class='fallback'>If PDF is not visible, <a href='${safeUrl}' target='_blank' rel='noopener noreferrer'>open it directly</a>.</div></body></html>`;
 }
 
 function normalizeWatermarkText(value) {
@@ -86,9 +88,9 @@ function isVideoMime(mimeType) {
 }
 
 function buildWatermarkedHtml(dataUrl, filename, watermarkText) {
-  return `<!doctype html><html><head><meta charset='utf-8'><title>${filename}</title><style>body{margin:0;font-family:Arial} .wrap{position:relative;height:100vh} iframe{width:100%;height:100%;border:0} .wm{position:absolute;inset:0;pointer-events:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='220'><text x='10' y='120' fill='rgba(0,0,0,0.15)' font-size='18' transform='rotate(-24 140,90)'>${encodeURIComponent(
+  return `<!doctype html><html><head><meta charset='utf-8'><title>${escapeHtml(filename)}</title><style>body{margin:0;font-family:Arial} .wrap{position:relative;height:100vh} iframe{width:100%;height:100%;border:0} .wm{position:absolute;inset:0;pointer-events:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='220'><text x='10' y='120' fill='rgba(0,0,0,0.15)' font-size='18' transform='rotate(-24 140,90)'>${encodeURIComponent(
     watermarkText
-  )}</text></svg>");background-repeat:repeat}</style></head><body><div class='wrap'><iframe src='${dataUrl}'></iframe><div class='wm'></div></div></body></html>`;
+  )}</text></svg>");background-repeat:repeat}</style></head><body><div class='wrap'><iframe sandbox='' src='${escapeHtml(dataUrl)}'></iframe><div class='wm'></div></div></body></html>`;
 }
 
 async function buildWatermarkedImageBlob(imageBlob, watermarkText, mimeType) {
@@ -172,15 +174,15 @@ async function buildWatermarkedPdfBlob(pdfBlob, watermarkText) {
 }
 
 function buildWatermarkedVideoHtml(dataUrl, filename, watermarkText) {
-  return `<!doctype html><html><head><meta charset='utf-8'><title>${filename}</title><style>body{margin:0;background:#111;font-family:Arial}.wrap{position:relative;height:100vh;display:flex;align-items:center;justify-content:center}video{max-width:100%;max-height:100%;background:#000}.wm{position:absolute;inset:0;pointer-events:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='220'><text x='10' y='120' fill='rgba(255,255,255,0.2)' stroke='rgba(0,0,0,0.28)' stroke-width='0.5' font-size='18' transform='rotate(-24 140,90)'>${encodeURIComponent(
+  return `<!doctype html><html><head><meta charset='utf-8'><title>${escapeHtml(filename)}</title><style>body{margin:0;background:#111;font-family:Arial}.wrap{position:relative;height:100vh;display:flex;align-items:center;justify-content:center}video{max-width:100%;max-height:100%;background:#000}.wm{position:absolute;inset:0;pointer-events:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='220'><text x='10' y='120' fill='rgba(255,255,255,0.2)' stroke='rgba(0,0,0,0.28)' stroke-width='0.5' font-size='18' transform='rotate(-24 140,90)'>${encodeURIComponent(
     watermarkText
-  )}</text></svg>");background-repeat:repeat}</style></head><body><div class='wrap'><video src='${dataUrl}' controls playsinline></video><div class='wm'></div></div></body></html>`;
+  )}</text></svg>");background-repeat:repeat}</style></head><body><div class='wrap'><video src='${escapeHtml(dataUrl)}' controls playsinline></video><div class='wm'></div></div></body></html>`;
 }
 
 async function buildDocxPreviewHtml(docxBlob) {
   const src = await docxBlob.arrayBuffer();
   const { value } = await mammoth.convertToHtml({ arrayBuffer: src });
-  return value || "<p>Unable to render DOCX preview.</p>";
+  return sanitizeHtml(value || "<p>Unable to render DOCX preview.</p>");
 }
 
 async function buildWatermarkedDocxBlob(docxBlob, watermarkText) {
@@ -449,7 +451,7 @@ function ShareAccess() {
                 </div>
               ) : mimeType === "application/pdf" ? (
                 <object data={previewUrl} type="application/pdf" className="h-full w-full bg-white">
-                  <iframe title="shared-preview" src={previewUrl} className="h-full w-full" />
+                  <iframe title="shared-preview" src={previewUrl} className="h-full w-full" sandbox="" />
                 </object>
               ) : isDocxMime(mimeType) ? (
                 <div className="h-full w-full overflow-auto bg-white p-6">
@@ -465,7 +467,7 @@ function ShareAccess() {
                   <video src={previewUrl} controls className="h-full w-full" />
                 </div>
               ) : (
-                <iframe title="shared-preview" src={previewUrl} className="w-full h-full" />
+                <iframe title="shared-preview" src={previewUrl} className="w-full h-full" sandbox="" />
               )}
               {shouldOverlayWatermark && <div className="absolute inset-0 pointer-events-none" style={watermarkStyle} />}
             </div>

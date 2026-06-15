@@ -1,9 +1,8 @@
 import { Bell, Menu, PanelLeftClose, PanelLeftOpen, Search, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import UserDropdown from "./UserDropdown";
-import { API_BASE, apiFetch } from "../utils/api";
-import { getAccessToken } from "../utils/session";
+import { apiFetch } from "../utils/api";
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -43,12 +42,6 @@ function TopBar({
     ? "Settings"
     : "Dashboard";
 
-  const streamUrl = useMemo(() => {
-    const token = getAccessToken();
-    if (!token) return null;
-    return `${API_BASE}/notifications/stream?access_token=${encodeURIComponent(token)}`;
-  }, []);
-
   useEffect(() => {
     seenAtRef.current = seenAt;
   }, [seenAt]);
@@ -77,11 +70,7 @@ function TopBar({
   }, []);
 
   useEffect(() => {
-    if (!streamUrl) return undefined;
-
     let pollHandle = null;
-    let eventSource = null;
-    let closed = false;
 
     const mergeNotifications = (nextItem) => {
       setNotifications((prev) => {
@@ -103,61 +92,32 @@ function TopBar({
       }
     };
 
-    const startPolling = () => {
-      if (pollHandle) return;
-      setFeedStatus("polling");
-      pollHandle = window.setInterval(async () => {
-        try {
-          const res = await apiFetch("/notifications?limit=10");
-          const data = await res.json();
-          if (!res.ok) return;
-          const items = Array.isArray(data?.items) ? data.items : [];
-          if (!items.length) return;
-          setUnreadCount(Number(data?.unread_count || 0));
-          setSeenAt(data?.seen_at || null);
-          for (const item of items.slice().reverse()) {
-            if (item?.id && item.id !== latestIdRef.current) {
-              mergeNotifications(item);
-            }
+    const pollNotifications = async () => {
+      try {
+        const res = await apiFetch("/notifications?limit=10");
+        const data = await res.json();
+        if (!res.ok) return;
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setFeedStatus("polling");
+        setUnreadCount(Number(data?.unread_count || 0));
+        setSeenAt(data?.seen_at || null);
+        for (const item of items.slice().reverse()) {
+          if (item?.id && item.id !== latestIdRef.current) {
+            mergeNotifications(item);
           }
-        } catch {
-          // keep last successful state
         }
-      }, 5000);
+      } catch {
+        setFeedStatus("idle");
+      }
     };
 
-    try {
-      eventSource = new EventSource(streamUrl);
-      setFeedStatus("live");
-
-      eventSource.addEventListener("notification", (event) => {
-        try {
-          const payload = JSON.parse(event.data || "{}");
-          if (!payload?.id) return;
-          mergeNotifications(payload);
-          setFeedStatus("live");
-        } catch {
-          // ignore malformed events
-        }
-      });
-
-      eventSource.onerror = () => {
-        if (closed) return;
-        setFeedStatus("reconnecting");
-        eventSource?.close();
-        eventSource = null;
-        startPolling();
-      };
-    } catch {
-      startPolling();
-    }
+    setFeedStatus("polling");
+    pollHandle = window.setInterval(pollNotifications, 5000);
 
     return () => {
-      closed = true;
-      eventSource?.close();
       if (pollHandle) window.clearInterval(pollHandle);
     };
-  }, [streamUrl]);
+  }, []);
 
   const markAllAsRead = async () => {
     try {

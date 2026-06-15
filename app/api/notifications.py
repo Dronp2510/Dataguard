@@ -2,12 +2,13 @@ import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
+from ..core.rate_limit import client_identity, enforce_rate_limit
 from ..database import SessionLocal
 from ..models import File as VaultFile, Share, ShareAccessLog, User
-from ..services.auth import get_current_user, resolve_user_from_access_token
+from ..services.auth import get_current_user
 from ..services.share import build_notification_payload
 from ..utils import convert_datetimes_to_ist
 
@@ -76,12 +77,9 @@ def mark_all_notifications_read(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/notifications/stream")
-async def notification_stream(access_token: str = Query(...)):
-    db = SessionLocal()
-    try:
-        user = resolve_user_from_access_token(db, access_token)
-    finally:
-        db.close()
+async def notification_stream(request: Request, current_user: User = Depends(get_current_user)):
+    enforce_rate_limit("notifications_stream", f"{current_user.id}:{client_identity(request)}", 10, 60)
+    user_id = current_user.id
 
     async def event_generator():
         stream_db = SessionLocal()
@@ -89,7 +87,7 @@ async def notification_stream(access_token: str = Query(...)):
         try:
             yield "event: ready\ndata: {\"ok\": true}\n\n"
             while True:
-                shares = stream_db.query(Share).filter(Share.owner_id == user.id).all()
+                shares = stream_db.query(Share).filter(Share.owner_id == user_id).all()
                 if shares:
                     share_map = {share.id: share for share in shares}
                     share_ids = list(share_map.keys())

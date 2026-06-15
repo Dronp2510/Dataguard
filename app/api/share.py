@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Form, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse
+from sqlalchemy import and_
 
 from ..core.rate_limit import client_identity, enforce_rate_limit
 from ..database import SessionLocal
@@ -9,7 +10,7 @@ from ..models import File as VaultFile, Share, ShareAccessLog, User, VaultItemTy
 from ..services.auth import get_current_user
 from ..services.share import create_share_access_log, get_share_or_410, resolve_viewer_identity
 from ..services.vault import ensure_item_owner
-from ..utils import convert_datetimes_to_ist, generate_token
+from ..utils import convert_datetimes_to_ist, generate_token, hash_token, resolve_storage_path, validate_metadata_value
 
 router = APIRouter()
 
@@ -28,6 +29,9 @@ def create_share_link(
     db = SessionLocal()
     try:
         enforce_rate_limit("share_create", f"{current_user.id}:{client_identity(request)}", 30, 60)
+        validate_metadata_value(encrypted_key, "encrypted_key")
+        validate_metadata_value(key_iv, "key_iv")
+        validate_metadata_value(key_salt, "key_salt")
 
         item = ensure_item_owner(db, file_id, current_user.id)
         if item.type != VaultItemType.file:
@@ -51,7 +55,9 @@ def create_share_link(
         share = Share(
             vault_item_id=file_id,
             owner_id=current_user.id,
-            token=token,
+            token=None,
+            token_hash=hash_token(token),
+            token_prefix=token[:8],
             encrypted_key=encrypted_key,
             key_iv=key_iv,
             key_salt=key_salt,
@@ -81,7 +87,7 @@ def list_my_shares(current_user: User = Depends(get_current_user)):
             {
                 "id": s.id,
                 "file_id": s.vault_item_id,
-                "token": s.token,
+                "token_prefix": s.token_prefix or (s.token[:8] if s.token else None),
                 "is_active": s.is_active,
                 "views": s.views,
                 "max_views": s.max_views,
@@ -167,25 +173,48 @@ def share_blob(
         file = db.query(VaultFile).filter(VaultFile.id == share.vault_item_id).first()
         if not file:
             raise HTTPException(status_code=404, detail="File not found")
+        path = resolve_storage_path(file.storage_path)
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="File blob not found")
 
         viewer_type, viewer_label = resolve_viewer_identity(db, token, authorization, x_guest_id, request)
         normalized_action = action if action in {"preview", "download"} else "preview"
+
+        filters = [
+            Share.id == share.id,
+            Share.is_active.is_(True),
+        ]
+        if share.max_views is not None:
+            filters.append(Share.views < share.max_views)
+        updated = (
+            db.query(Share)
+            .filter(and_(*filters))
+            .update({Share.views: Share.views + 1}, synchronize_session=False)
+        )
+        if updated != 1:
+            db.rollback()
+            raise HTTPException(status_code=410, detail="Share link view limit reached")
+
         create_share_access_log(db, share.id, normalized_action, viewer_type, viewer_label, request)
-        share.views = (share.views or 0) + 1
         db.commit()
 
         return FileResponse(
-            path=file.storage_path,
-            media_type=file.mime_type,
+            path=path,
+            media_type="application/octet-stream",
             filename=file.filename,
-            headers={"Content-Disposition": f'inline; filename="{file.filename}"'},
+            content_disposition_type="attachment",
+            headers={"X-Content-Type-Options": "nosniff"},
         )
     finally:
         db.close()
 
 
 @router.get("/share/{share_id}/logs")
-def share_logs(share_id: str, current_user: User = Depends(get_current_user)):
+def share_logs(
+    share_id: str,
+    limit: int = Query(default=500, ge=1, le=1000),
+    current_user: User = Depends(get_current_user),
+):
     db = SessionLocal()
     try:
         share = db.query(Share).filter(Share.id == share_id).first()
@@ -193,7 +222,13 @@ def share_logs(share_id: str, current_user: User = Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="Share not found")
         if share.owner_id != current_user.id:
             raise HTTPException(status_code=403, detail="Forbidden")
-        logs = db.query(ShareAccessLog).filter(ShareAccessLog.share_id == share_id).order_by(ShareAccessLog.created_at.desc()).all()
+        logs = (
+            db.query(ShareAccessLog)
+            .filter(ShareAccessLog.share_id == share_id)
+            .order_by(ShareAccessLog.created_at.desc())
+            .limit(limit)
+            .all()
+        )
         return convert_datetimes_to_ist([
             {
                 "id": log.id,

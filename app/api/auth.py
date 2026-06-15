@@ -11,7 +11,14 @@ from ..models import AuthSession, EncryptedKey, File as VaultFile, User, VaultIt
 from ..schemas import PasswordChangeRequest
 from ..services.auth import bind_guest_identity_to_user, get_bearer_token, get_current_user
 from ..services.vault import get_storage_summary
-from ..utils import convert_datetimes_to_ist, generate_token, hash_token, new_session_expiry
+from ..utils import (
+    convert_datetimes_to_ist,
+    generate_token,
+    hash_token,
+    new_session_expiry,
+    sanitize_display_name,
+    validate_metadata_value,
+)
 
 router = APIRouter()
 
@@ -25,12 +32,9 @@ def signup(
 ):
     db = SessionLocal()
     try:
-        username = username.strip()
+        username = sanitize_display_name(username, "Username")
         email = email.strip().lower()
-        password = password.strip()
 
-        if len(username) < 1:
-            raise HTTPException(status_code=400, detail="Username is required")
         if "@" not in email:
             raise HTTPException(status_code=400, detail="Email must contain '@'")
         if len(password) < 8:
@@ -66,8 +70,9 @@ def login(
     try:
         client = client_identity(request)
         enforce_rate_limit("login_ip", client, 20, 60)
-        enforce_rate_limit("login_email", email.lower(), 10, 60)
-        user = db.query(User).filter(User.email == email).first()
+        normalized_email = email.strip().lower()
+        enforce_rate_limit("login_email", normalized_email, 10, 60)
+        user = db.query(User).filter(User.email == normalized_email).first()
 
         if not user or not check_password_hash(user.password_hash, password):
             raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -170,12 +175,12 @@ def change_password(payload: PasswordChangeRequest, current_user: User = Depends
         if not check_password_hash(user.password_hash, payload.current_password):
             raise HTTPException(status_code=401, detail="Current password is incorrect")
 
-        new_password = payload.new_password.strip()
-        if len(new_password) < 8:
+        if len(payload.new_password) < 8:
             raise HTTPException(status_code=400, detail="New password must be at least 8 characters long")
 
         if payload.current_password == payload.new_password:
             raise HTTPException(status_code=400, detail="New password must be different from the current password")
+        validate_metadata_value(payload.new_salt, "new_salt")
 
         existing_rows = db.query(EncryptedKey).filter(EncryptedKey.user_id == user.id).all()
         existing_ids = {row.vault_item_id for row in existing_rows}
@@ -189,8 +194,8 @@ def change_password(payload: PasswordChangeRequest, current_user: User = Depends
 
         updates_by_item_id = {}
         for row in payload.wrapped_keys:
-            if not row.encrypted_key or not row.key_iv:
-                raise HTTPException(status_code=400, detail="Wrapped key data is incomplete")
+            validate_metadata_value(row.encrypted_key, "encrypted_key")
+            validate_metadata_value(row.key_iv, "key_iv")
             updates_by_item_id[row.vault_item_id] = row
 
         user.password_hash = generate_password_hash(payload.new_password)

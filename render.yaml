@@ -17,6 +17,8 @@ services:
         value: https://dataguard-frontend.onrender.com
       - key: APP_ENV
         value: production
+      - key: TRUST_PROXY_HEADERS
+        value: "true"
       - key: MAX_UPLOAD_BYTES
         value: "1610612736"
   - type: web

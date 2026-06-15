@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { getMasterKey } from "../utils/keyStore";
 import { decryptFile, decryptFileKey, gzipDecompressArrayBuffer } from "../utils/crypto";
 import { apiFetch } from "../utils/api";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 import mammoth from "mammoth";
 
 function isDocxMime(mimeType) {
@@ -61,7 +62,7 @@ function FilePreviewModal({ file, onClose }) {
         if (isDocxMime(mime_type)) {
           const rendered = await mammoth.convertToHtml({ arrayBuffer: normalizedBuffer });
           if (!active) return;
-          setDocxHtml(rendered.value || "<p>Unable to render DOCX preview.</p>");
+          setDocxHtml(sanitizeHtml(rendered.value || "<p>Unable to render DOCX preview.</p>"));
           setTextPreview("");
         } else if (isTextMime(mime_type)) {
           const text = new TextDecoder("utf-8").decode(normalizedBuffer);
@@ -127,7 +128,7 @@ function FilePreviewModal({ file, onClose }) {
           )}
           {previewUrl && isPdf && (
             <object data={previewUrl} type="application/pdf" className="h-full w-full">
-              <iframe src={previewUrl} title="File Preview" className="h-full w-full" />
+              <iframe src={previewUrl} title="File Preview" className="h-full w-full" sandbox="" />
             </object>
           )}
           {previewUrl && isDocx && (
@@ -146,7 +147,7 @@ function FilePreviewModal({ file, onClose }) {
             </div>
           )}
           {previewUrl && !isImage && !isPdf && !isDocx && !isText && !isVideo && (
-            <iframe src={previewUrl} title="File Preview" className="h-full w-full" />
+            <iframe src={previewUrl} title="File Preview" className="h-full w-full" sandbox="" />
           )}
         </div>
       </div>

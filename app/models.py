@@ -71,7 +71,9 @@ class Share(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     vault_item_id = Column(String, ForeignKey("vault_items.id"))
     owner_id = Column(String, ForeignKey("users.id"), nullable=False)
-    token = Column(String, unique=True, nullable=False)
+    token = Column(String, unique=True, nullable=True)
+    token_hash = Column(String, unique=True, nullable=True)
+    token_prefix = Column(String, nullable=True)
     encrypted_key = Column(String, nullable=False)  # file_key encrypted with share_key
     key_iv = Column(String, nullable=False)
     key_salt = Column(String, nullable=False)

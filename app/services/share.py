@@ -9,7 +9,10 @@ from .auth import bind_guest_identity_to_user, normalize_guest_id, user_watermar
 
 
 def get_share_or_410(db, token: str) -> Share:
-    share = db.query(Share).filter(Share.token == token).first()
+    token_hash = hash_token(token)
+    share = db.query(Share).filter(Share.token_hash == token_hash).first()
+    if not share:
+        share = db.query(Share).filter(Share.token == token).first()
     if not share or not share.is_active:
         raise HTTPException(status_code=410, detail="Share link is invalid")
 

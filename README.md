@@ -109,6 +109,7 @@ Backend variables:
 | `STORAGE_PATH` | `./secure_storage` | Directory for encrypted uploaded blobs |
 | `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Allowed browser origins |
 | `APP_ENV` | `development` | Used to reject wildcard CORS outside development |
+| `TRUST_PROXY_HEADERS` | `false` | Trust `X-Forwarded-For` for rate limits only when behind a trusted proxy |
 | `MAX_UPLOAD_BYTES` | `1610612736` | Per-file upload limit, default 1.5 GB |
 | `MAX_USER_STORAGE_BYTES` | `16106127360` | Per-user quota, default 15 GB |
 
@@ -119,6 +120,7 @@ Frontend variables:
 | `VITE_API_BASE_URL` | `/api` | API base URL used by `apiFetch` |
 | `VITE_BACKEND_TARGET` | `http://127.0.0.1:8000` | Vite dev proxy target |
 | `VITE_PUBLIC_SHARE_ORIGIN` | unset | Public frontend origin for share URLs |
+| `VITE_PERSIST_MASTER_KEY` | `false` | Optional dev convenience to persist the raw derived master key in session storage |
 
 ## API Overview
 
@@ -169,8 +171,13 @@ Important implementation notes:
 
 - Password hashes are stored with Werkzeug.
 - Session tokens are generated randomly and stored server-side only as SHA-256 hashes.
+- New share tokens are generated randomly and stored server-side only as SHA-256 hashes; legacy plaintext-token rows are still readable for compatibility.
 - Upload, login, signup, share metadata, share blob, and share creation endpoints have in-memory rate limits.
+- Rate limiting trusts proxy headers only when `TRUST_PROXY_HEADERS=true`.
 - Share links can expire, be revoked, or stop working after a configured view limit.
+- Encrypted blob paths are confined to `STORAGE_PATH`, and blob responses are served as `application/octet-stream` with `nosniff`.
+- Client-side DOCX HTML previews are sanitized before insertion into the DOM.
+- Browser auth tokens are kept in `sessionStorage`; the raw derived master key is memory-only unless `VITE_PERSIST_MASTER_KEY=true`.
 - The current SQLite migration support is lightweight and handled by `app/bootstrap.py`.
 
 ## Testing
@@ -198,5 +205,5 @@ On Render free tier, the configured SQLite database and storage directory use `/
 
 - Do not commit `.env` files, local databases, virtual environments, or uploaded encrypted blobs.
 - The backend creates the configured storage directory automatically.
-- The frontend keeps the derived master key in memory and session storage for the current tab session.
+- The frontend keeps the derived master key in memory by default. Set `VITE_PERSIST_MASTER_KEY=true` only if you accept the extra risk in exchange for refresh persistence.
 - Because encrypted blobs are stored on disk, deleting a vault file also removes the corresponding stored blob when present.

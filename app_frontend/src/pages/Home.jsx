@@ -5,6 +5,7 @@ import { useOutletContext } from "react-router-dom";
 import FilePreviewModal from "../components/FilePreviewModal";
 import ShareModal from "../components/ShareModal";
 import { apiFetch } from "../utils/api";
+import { getUser } from "../utils/session";
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -116,13 +117,7 @@ function Home() {
   const [openMenuId, setOpenMenuId] = useState(null);
   const navigate = useNavigate();
 
-  const user = useMemo(() => {
-    try {
-      return JSON.parse(sessionStorage.getItem("user") || "null");
-    } catch {
-      return null;
-    }
-  }, []);
+  const user = useMemo(() => getUser(), []);
 
   useEffect(() => {
     let active = true;
